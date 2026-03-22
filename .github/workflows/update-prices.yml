@@ -1,0 +1,63 @@
+name: Weekly Grocery Price Sync
+
+on:
+  schedule:
+    # 11:00 PM AWST (Perth Time) is 3:00 PM UTC. Runs Every Sunday.
+    - cron: '0 15 * * 0'
+  workflow_dispatch:
+
+jobs:
+  update-prices:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Python 3.10+
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+        
+    - name: Install dependencies from requirements.txt
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        playwright install chromium
+        
+    - name: Run Woolworths Pipeline
+      env:
+        AIRTABLE_TOKEN: ${{ secrets.AIRTABLE_TOKEN }}
+        AIRTABLE_BASE_ID: ${{ secrets.AIRTABLE_BASE_ID }}
+      run: python grocerycompare/woolworths_to_airtable.py
+      continue-on-error: true
+      id: woolies
+
+    - name: Run Coles Pipeline
+      env:
+        AIRTABLE_TOKEN: ${{ secrets.AIRTABLE_TOKEN }}
+        AIRTABLE_BASE_ID: ${{ secrets.AIRTABLE_BASE_ID }}
+      run: python grocerycompare/coles_to_airtable.py
+      continue-on-error: true
+      id: coles
+
+    - name: Run Chemist Warehouse Pipeline
+      env:
+        AIRTABLE_TOKEN: ${{ secrets.AIRTABLE_TOKEN }}
+        AIRTABLE_BASE_ID: ${{ secrets.AIRTABLE_BASE_ID }}
+      run: python grocerycompare/chemist_warehouse_to_airtable.py
+      continue-on-error: true
+      id: chemist
+
+    # ALDI PIPELINE TEMPORARILY REMOVED PENDING APIFY KEY REGISTRATION
+
+    - name: Error Handling & Trigger Notifications
+      if: steps.woolies.outcome == 'failure' || steps.coles.outcome == 'failure' || steps.chemist.outcome == 'failure'
+      run: |
+        echo "🚨 CRITICAL ERROR: One or more pipelines failed during the sync process!"
+        echo "- Woolworths: ${{ steps.woolies.outcome }}"
+        echo "- Coles: ${{ steps.coles.outcome }}"
+        echo "- Chemist Warehouse: ${{ steps.chemist.outcome }}"
+        echo "Failing the Github workflow deliberately to trigger the native email notification to the repository owner!"
+        exit 1

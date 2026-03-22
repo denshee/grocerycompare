@@ -1,0 +1,124 @@
+﻿Initializing Airtable connection...
+Fetching all listings...
+Applying hyper-strict matching logic...
+
+=== MATCH SAMPLES PER CATEGORY (Max 5) ===
+
+--- MILK (141 total) ---
+[Pending 60%] Reese's Peanut Butter Cups Miniatures Milk Chocolate 150g  <==>  Dairy Milk Block Chocolate
+[Pending 60%] Reese's Peanut Butter Cups Miniatures Milk Chocolate 150g  <==>  Kit Kat Chocolate Milk 4 Finger Bar
+[Approved 80%] Riverina Fresh Full Cream Milk 2L  <==>  Farmhouse Gold Full Cream Milk
+[Approved 80%] Riverina Fresh Full Cream Milk 2L  <==>  Full Cream Milk
+[Approved 80%] Riverina Fresh Full Cream Milk 2L  <==>  Dairy Full Cream Milk
+
+--- BREAD (125 total) ---
+[Approved 80%] Woolworths Multigrain Sandwich Hi-Fibre Bread 700g  <==>  Bread High Fibre Multigrain
+[Approved 80%] Woolworths Multigrain Sandwich Hi-Fibre Bread 700g  <==>  High Fibre White Sandwich Bread
+[Pending 60%] Woolworths Multigrain Sandwich Hi-Fibre Bread 700g  <==>  High Fibre White Toast Bread
+[Pending 60%] Woolworths Multigrain Soft Sandwich Bread 650g  <==>  Bread High Fibre Multigrain
+[Pending 60%] Woolworths Multigrain Soft Sandwich Bread 650g  <==>  High Fibre White Sandwich Bread
+
+--- EGGS (19 total) ---
+[Approved 80%] Manning Valley 30 Free Range Eggs 1.65kg  <==>  Free Range Eggs 12pack
+[Approved 80%] Woolworths 6 Extra Large Free Range Eggs 350g  <==>  Free Range Eggs 12pack
+[Pending 60%] Sunny Queen 12 Extra Large Cage Free Eggs 700g  <==>  Free Range Eggs 12pack
+[Approved 80%] Manning Valley 12 Large Free Range Eggs 600g  <==>  Free Range Eggs 12pack
+[Approved 80%] Woolworths 12 Large Free Range Eggs 600g  <==>  Free Range Eggs 12pack
+
+--- BUTTER (105 total) ---
+[Pending 60%] Devondale Butter Block Salted 250g  <==>  Butter Slightly Salted
+[Pending 60%] Devondale Butter Block Salted 250g  <==>  Protein Muesli Bars Salted Caramel Nut Butter
+[Pending 60%] Devondale Butter Block Salted 250g  <==>  Butter Soft Salted Spreadable Butter
+[Pending 60%] Devondale Butter Block Salted 250g  <==>  Salted Butter
+[Pending 60%] Devondale Butter Block Salted 250g  <==>  Butter Spreadable Slightly Salted
+
+--- CHEESE (230 total) ---
+[Pending 60%] Woolworths Tasty Cheese Slices 250g  <==>  Dairy Cheese Tasty
+[Approved 80%] Woolworths Tasty Cheese Slices 250g  <==>  Tasty Cheese Slices
+[Pending 60%] Woolworths Tasty Cheese Slices 250g  <==>  Tasty Cheese Corn Thins
+[Pending 60%] Woolworths Tasty Cheese Slices 250g  <==>  Cheese Burger Slices
+[Pending 60%] Woolworths Tasty Cheese Slices 250g  <==>  Shredded Tasty Cheese
+
+--- YOGHURT (495 total) ---
+[Approved 80%] YoPRO High Protein Yoghurt Pouch Vanilla 150g  <==>  Squeezie Vanilla Yoghurt Pouch
+[Pending 60%] YoPRO High Protein Yoghurt Pouch Vanilla 150g  <==>  Kids Greek Yoghurt Pouch Blueberry
+[Pending 60%] YoPRO High Protein Yoghurt Pouch Vanilla 150g  <==>  Squeezie Yoghurt Pouch Strawberry
+[Pending 60%] YoPRO High Protein Yoghurt Pouch Vanilla 150g  <==>  Squeezie Banana Yoghurt Pouch
+[Pending 60%] YoPRO High Protein Yoghurt Pouch Vanilla 150g  <==>  Kids Greek Yoghurt Pouch Strawberry
+
+--- CHICKEN (1014 total) ---
+[Pending 60%] Mt Barker Free Range Peri Peri Diced Chicken Breast 220g  <==>  Mac Chicken Breast Roasted
+[Pending 60%] Mt Barker Free Range Peri Peri Diced Chicken Breast 220g  <==>  Frozen Chicken Breast Schnitzel
+[Pending 60%] Mt Barker Free Range Peri Peri Diced Chicken Breast 220g  <==>  RSPCA Approved Chicken Breast Schnitzel Plain Crumb
+[Pending 60%] Mt Barker Free Range Peri Peri Diced Chicken Breast 220g  <==>  Smoked Chicken Breast
+[Approved 95%] Mt Barker Free Range Peri Peri Diced Chicken Breast 220g  <==>  Free Range Chicken Breast Fillets Bulk
+
+--- BEEF (152 total) ---
+[Pending 60%] Macro Grass Fed Australian Beef Mince 500g  <==>  Carbon Neutral Beef Mince
+[Pending 60%] Macro Grass Fed Australian Beef Mince 500g  <==>  Beef Mince
+[Pending 60%] Macro Grass Fed Australian Beef Mince 500g  <==>  No Added Hormone Beef 3 Star Regular Mince
+[Pending 60%] Macro Grass Fed Australian Beef Mince 500g  <==>  No Added Hormone Beef 5 Star Extra Lean Mince
+[Pending 60%] Macro Grass Fed Australian Beef Mince 500g  <==>  Pork & Beef 3 Star Regular Mince Bolognese
+
+--- RICE (163 total) ---
+[Pending 60%] Woolworths Basmati Rice Microwave Cup 125g x 2 pack  <==>  Basmati Rice
+[Pending 60%] Woolworths Basmati Rice Microwave Cup 125g x 2 pack  <==>  Crown Basmati Rice
+[Approved 80%] Woolworths Basmati Rice Microwave Cup 125g x 2 pack  <==>  Microwave Basmati Rice Pouch
+[Approved 95%] Woolworths Basmati Rice Microwave Cup 125g x 2 pack  <==>  Microwave Basmati Rice Cup
+[Pending 60%] Woolworths Basmati Rice Microwave Cup 125g x 2 pack  <==>  Microwave Jasmine Rice Pouch
+
+--- PASTA (143 total) ---
+[Approved 95%] Vetta SMART Protein Spirals Pasta 375g  <==>  Smart Protein Spirals Pasta
+[Pending 60%] Vetta SMART Protein Spirals Pasta 375g  <==>  Pasta Spirals
+[Pending 60%] Vetta SMART Protein Spirals Pasta 375g  <==>  Large Pasta Spirals No 53
+[Approved 80%] Vetta SMART Protein Spirals Pasta 375g  <==>  Smart Protein Penne Pasta
+[Pending 60%] Vetta SMART Protein Spirals Pasta 375g  <==>  Red Lentils Spirals Pulse Pasta
+
+--- CEREAL (207 total) ---
+[Approved 80%] Nestle Milo Breakfast Cereal 620g  <==>  Milo Breakfast Cereal
+[Pending 60%] Nestle Milo Breakfast Cereal 620g  <==>  Just Right Breakfast Cereal With Whole Grains Apricot Pieces And Sultanas
+[Pending 60%] Nestle Milo Breakfast Cereal 620g  <==>  Sultana Bran High Fibre Breakfast Cereal
+[Pending 60%] Nestle Milo Breakfast Cereal 620g  <==>  Weet-bix Little Kids Essentials Breakfast Cereal
+[Pending 60%] Nestle Milo Breakfast Cereal 620g  <==>  Cheerios Honey Breakfast Cereal
+
+--- JUICE (382 total) ---
+[Approved 95%] Eastcoast Orange Juice Pulp Free 2L  <==>  Nothing But 100% Juice Orange Pulp Free
+[Pending 60%] Eastcoast Orange Juice Pulp Free 2L  <==>  Orange Juice
+[Pending 60%] Eastcoast Orange Juice Pulp Free 2L  <==>  Juice Orange
+[Approved 95%] Eastcoast Orange Juice Pulp Free 2L  <==>  Orange Juice Pulp Free
+[Approved 95%] Eastcoast Orange Juice Pulp Free 2L  <==>  Pulp Free No Added Sugar Orange Juice
+
+--- CHIPS (60 total) ---
+[Approved 95%] Red Rock Deli Potato Chips Sea Salt & Balsamic Vinegar 165g  <==>  Sea Salt Potato Chips
+[Pending 60%] Red Rock Deli Potato Chips Sea Salt & Balsamic Vinegar 165g  <==>  Superfries Frozen Potato Chips Shoestring
+[Approved 95%] Red Rock Deli Potato Chips Sea Salt & Balsamic Vinegar 165g  <==>  Sea Salt & Vinegar Potato Chips
+[Pending 60%] Red Rock Deli Potato Chips Sea Salt & Balsamic Vinegar 165g  <==>  Chilli Potato Chips
+[Pending 60%] Thins Chips Salt & Vinegar 175g  <==>  Sea Salt Potato Chips
+
+--- COFFEE (202 total) ---
+[Pending 60%] Robert Timms Premium Espresso Granulated Coffee 200g  <==>  Double Espresso Coffee
+[Pending 60%] Robert Timms Premium Espresso Granulated Coffee 200g  <==>  Classic Granulated Coffee
+[Pending 60%] Robert Timms Premium Espresso Granulated Coffee 200g  <==>  Espresso Coffee Beans
+[Pending 60%] Robert Timms Premium Espresso Granulated Coffee 200g  <==>  Iced Coffee Double Espresso
+[Pending 60%] Moccona Freeze Dried Instant Coffee Classic Medium Roast 50g  <==>  Gold Original Instant Coffee Jar
+
+--- TEA (149 total) ---
+[Pending 60%] Twinings Cranberry & Pomegranate Tea Bags 10 pack  <==>  Quality Black Tea Bags
+[Pending 60%] Twinings Cranberry & Pomegranate Tea Bags 10 pack  <==>  English Breakfast Tea Bags Teacup
+[Pending 60%] Twinings Cranberry & Pomegranate Tea Bags 10 pack  <==>  Extra Strong Black Tea Bags
+[Pending 60%] Twinings Cranberry & Pomegranate Tea Bags 10 pack  <==>  Black Tea Bags
+[Approved 95%] Essentials Black Tea Bags 100 pack  <==>  Decaffeinated Black Tea Bags 100 Pack
+
+--- TOILET PAPER (380 total) ---
+[Approved 80%] Quilton Gold King Size 4 Ply Toilet Paper 20 pack  <==>  3 Ply Soft & Strong Toilet Paper
+[Approved 95%] Quilton Gold King Size 4 Ply Toilet Paper 20 pack  <==>  Quilts 4 Ply Toilet Paper
+[Approved 80%] Quilton Gold King Size 4 Ply Toilet Paper 20 pack  <==>  3 Ply Double Length White Toilet Paper
+[Pending 60%] Quilton Gold King Size 4 Ply Toilet Paper 20 pack  <==>  Complete Clean Double Length Toilet Paper
+[Approved 80%] Quilton Gold King Size 4 Ply Toilet Paper 20 pack  <==>  3 Ply Soft & Strong Silky White Toilet Paper
+
+--- DISHWASHING (633 total) ---
+[Pending 60%] Palmolive Dishwashing Liquid AU Extracts Lemon - Ultra 750mL  <==>  Strawberry And Guava Dishwashing Liquid
+[Approved 80%] Palmolive Dishwashing Liquid AU Extracts Lemon - Ultra 750mL  <==>  Complete Clean Dishwashing Liquid Lemon
+[Pending 60%] Palmolive Dishwashing Liquid AU Extracts Lemon - Ultra 750mL  <==>  Dishwashing Liquid
+[Approved 80%] Palmolive Dishwashing Liquid AU Extracts Lemon - Ultra 750mL  <==>  Regular Dishwashing Liquid Lemon Lime Bulk Pack
+[Approved 95%] Palmolive Dishwashing Liquid AU Extracts Lemon - Ultra 750mL  <==>  Dishwashing Liquid Ultra Australian Extracts Quandong Peach & Frangipani

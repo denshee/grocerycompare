@@ -1,0 +1,21 @@
+--- Smart Filtering Phase ---
+Bucket 'milk': 2014 raw comparisons -> 393 shortlisted pairs
+Bucket 'bread': 550 raw comparisons -> 148 shortlisted pairs
+Bucket 'eggs': 364 raw comparisons -> 310 shortlisted pairs
+Bucket 'butter': 728 raw comparisons -> 120 shortlisted pairs
+Bucket 'cheese': 1628 raw comparisons -> 362 shortlisted pairs
+Bucket 'yoghurt': 1015 raw comparisons -> 535 shortlisted pairs
+Bucket 'chicken': 1540 raw comparisons -> 1181 shortlisted pairs
+Bucket 'beef': 231 raw comparisons -> 182 shortlisted pairs
+Bucket 'rice': 806 raw comparisons -> 175 shortlisted pairs
+Bucket 'pasta': 837 raw comparisons -> 164 shortlisted pairs
+Bucket 'cereal': 400 raw comparisons -> 310 shortlisted pairs
+Bucket 'juice': 420 raw comparisons -> 401 shortlisted pairs
+Bucket 'chips': 264 raw comparisons -> 88 shortlisted pairs
+Bucket 'chocolate': 207 raw comparisons -> 54 shortlisted pairs
+Bucket 'coffee': 1024 raw comparisons -> 251 shortlisted pairs
+Bucket 'tea': 672 raw comparisons -> 358 shortlisted pairs
+Bucket 'toilet paper': 399 raw comparisons -> 399 shortlisted pairs
+Bucket 'dishwashing': 676 raw comparisons -> 658 shortlisted pairs
+
+Total raw comparisons eliminated: 13775 -> 6089

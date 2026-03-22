@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GroceryCompare</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #f4f6f8;
+            --surface-color: #ffffff;
+            --text-primary: #111827;
+            --text-secondary: #6b7280;
+            --accent-primary: #3b82f6;
+            --accent-hover: #2563eb;
+            --border-color: #e5e7eb;
+
+            --woolies-color: #178841;
+            /* Woolworths Green */
+            --woolies-bg: #e6f6eb;
+            --coles-color: #e01a22;
+            /* Coles Red */
+            --coles-bg: #fce8e9;
+            --cheaper-color: #10b981;
+            /* Winner Green Highlighter */
+
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-full: 9999px;
+            --radius-sm: 8px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            -webkit-font-smoothing: antialiased;
+            padding-bottom: 60px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+            text-align: center;
+            margin-bottom: 16px;
+            letter-spacing: -0.05em;
+            background: linear-gradient(135deg, var(--woolies-color), var(--coles-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .search-container {
+            position: relative;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 18px 24px;
+            border-radius: var(--radius-full);
+            border: 2px solid transparent;
+            background-color: var(--bg-color);
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+            outline: none;
+        }
+
+        .search-input:focus {
+            border-color: var(--accent-primary);
+            background-color: var(--surface-color);
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+        }
+
+        .main-content {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 24px 20px;
+        }
+
+        .loader {
+            display: none;
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+            font-weight: 500;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .match-card {
+            background: var(--surface-color);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-md);
+            overflow: hidden;
+            margin-bottom: 24px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            position: relative;
+        }
+
+        .match-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .match-title {
+            padding: 16px 20px;
+            background: #f8fafc;
+            border-bottom: 1px solid var(--border-color);
+            font-weight: 700;
+            font-size: 16px;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .comparison-grid {
+            display: flex;
+            width: 100%;
+        }
+
+        .product-col {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .product-col:first-child {
+            border-right: 1px solid var(--border-color);
+        }
+
+        /* Unmatched Single Columns */
+        .single-grid {
+            border-right: none !important;
+        }
+
+        .store-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: var(--radius-full);
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 12px;
+            align-self: flex-start;
+            white-space: nowrap;
+        }
+
+        .store-woolies {
+            background: var(--woolies-bg);
+            color: var(--woolies-color);
+        }
+
+        .store-coles {
+            background: var(--coles-bg);
+            color: var(--coles-color);
+        }
+
+        .image-container {
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--surface-color);
+            border-radius: var(--radius-md);
+            padding: 4px;
+        }
+
+        .product-image {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            mix-blend-mode: multiply;
+        }
+
+        .product-name {
+            font-size: 14px;
+            font-weight: 600;
+            line-height: 1.4;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+            flex-grow: 1;
+        }
+
+        .price-container {
+            margin-top: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .price-large {
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            line-height: 1;
+        }
+
+        .unit-price {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            font-weight: 500;
+        }
+
+        .special-badge {
+            background: #fef08a;
+            /* Yellow */
+            color: #854d0e;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 3px 8px;
+            border-radius: var(--radius-sm);
+            text-transform: uppercase;
+            align-self: flex-start;
+            margin-top: 8px;
+        }
+
+        .cheapest-col {
+            background-color: #f0fdf4;
+            /* Light green tint */
+            position: relative;
+        }
+
+        .cheapest-col::before {
+            content: 'CHEAPEST';
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: var(--cheaper-color);
+            color: white;
+            font-size: 10px;
+            font-weight: 800;
+            padding: 4px 8px;
+            border-radius: var(--radius-full);
+            letter-spacing: 0.05em;
+        }
+
+        .cheapest-col .price-large {
+            color: var(--cheaper-color);
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        /* Make it incredibly tight on mobile */
+        @media (max-width: 480px) {
+            .product-col {
+                padding: 16px 12px;
+            }
+
+            .image-container {
+                width: 70px;
+                height: 70px;
+            }
+
+            .price-large {
+                font-size: 24px;
+            }
+
+            .product-name {
+                font-size: 13px;
+            }
+
+            .cheapest-col::before {
+                top: 12px;
+                right: 12px;
+            }
+
+            .match-title {
+                font-size: 14px;
+                padding: 12px 16px;
+            }
+
+            /* Single column full width fixes */
+            .comparison-grid.single-layout {
+                flex-direction: column;
+            }
+
+            .product-col.single-grid {
+                border-bottom: 1px solid var(--border-color);
+            }
+
+            .product-col.single-grid:last-child {
+                border-bottom: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- CONFIGURATION -->
+    <script>
+        const AIRTABLE_TOKEN = "CHANGEME_TOKEN"; // REPLACED AUTOMATICALLY OR MANUALLY
+        const BASE_ID = "appryWRqjOFw4EajV";
+    </script>
+
+    <header class="header">
+        <div class="logo">GroceryCompare</div>
+        <div class="search-container">
+            <input type="text" id="searchInput" class="search-input" placeholder="Search for milk, bread, eggs..."
+                autocomplete="off">
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div id="loader" class="loader">Comparing millions of prices...</div>
+        <div id="resultsGrid">
+            <div class="empty-state">
+                <div class="empty-icon">🛒</div>
+                <h3 style="color:var(--text-primary); font-size:18px; margin-bottom:8px;">Ready to save?</h3>
+                <p>Search for any grocery item to see side-by-side supermarket prices instantly.</p>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const SYNONYMS = {
+            'lf': 'lactose free',
+            'ww': 'woolworths',
+            'skim': 'low fat',
+            'choc': 'chocolate'
+        };
+
+        function levenshtein(a, b) {
+            if (a.length === 0) return b.length;
+            if (b.length === 0) return a.length;
+            const matrix = [];
+            for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+            for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+            for (let i = 1; i <= b.length; i++) {
+                for (let j = 1; j <= a.length; j++) {
+                    if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                        matrix[i][j] = matrix[i - 1][j - 1];
+                    } else {
+                        matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1));
+                    }
+                }
+            }
+            return matrix[b.length][a.length];
+        }
+
+        function fuzzyMatch(word, target) {
+            if (target.includes(word)) return { match: true, exact: true };
+            const allowedDistance = word.length > 4 ? 2 : 1;
+            if (word.length <= 2) return { match: false, exact: false };
+            if (levenshtein(word, target) <= allowedDistance) return { match: true, exact: false };
+            return { match: false, exact: false };
+        }
+
+        const searchInput = document.getElementById('searchInput');
+        const resultsGrid = document.getElementById('resultsGrid');
+        const loader = document.getElementById('loader');
+
+        let typingTimer;
+
+        searchInput.addEventListener('input', () => {
+            clearTimeout(typingTimer);
+            const query = searchInput.value;
+
+            if (query.trim().length === 0) {
+                resultsGrid.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">🛒</div>
+                        <h3 style="color:var(--text-primary); font-size:18px; margin-bottom:8px;">Ready to save?</h3>
+                        <p>Search for any grocery item to see side-by-side supermarket prices instantly.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            typingTimer = setTimeout(() => {
+                executeSearch(query);
+            }, 600);
+        });
+
+        async function executeSearch(rawQuery) {
+            if (!AIRTABLE_TOKEN || AIRTABLE_TOKEN === "CHANGEME_TOKEN") {
+                resultsGrid.innerHTML = `<div class="empty-state">⚠️ AIRTABLE_TOKEN is missing.</div>`;
+                return;
+            }
+
+            resultsGrid.innerHTML = '';
+            loader.style.display = 'block';
+
+            try {
+                // 1. Lowercase and split
+                const lowerQuery = rawQuery.toLowerCase().trim();
+                const rawWords = lowerQuery.split(/\s+/);
+
+                // 2. Synonyms mapping
+                const searchWords = [];
+                for (const w of rawWords) {
+                    if (SYNONYMS[w]) {
+                        searchWords.push(...SYNONYMS[w].split(' '));
+                    } else {
+                        searchWords.push(w);
+                    }
+                }
+
+                // Secure Airtable query tracking standard name parameters natively dropping unknown category schema filters avoiding API 422 endpoints
+                const orConditions = searchWords.map(token => {
+                    const escaped = token.replace(/"/g, '\\"');
+                    return `FIND(LOWER("${escaped}"), LOWER({Listing name})) > 0`;
+                });
+                const broadFormula = searchWords.length > 0 ? `OR(${orConditions.join(',')})` : 'TRUE()';
+
+                // Boosted record buffer slightly to offset multi-word filtering dropouts
+                const listingsUrl = `https://api.airtable.com/v0/${BASE_ID}/Listings?filterByFormula=${encodeURIComponent(broadFormula)}&maxRecords=300`;
+
+                const listingsRes = await fetch(listingsUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_TOKEN}` } });
+                if (!listingsRes.ok) throw new Error("Airtable API Error");
+                const listingsData = await listingsRes.json();
+
+                // 3. Strict Frontend filtering: EVERY word must be found scanning Name + Category mapping relevance ranks
+                const fetchedProducts = [];
+                listingsData.records.forEach(r => {
+                    const lowerName = (r.fields["Listing name"] || "").toLowerCase();
+                    const lowerCat = (r.fields["Category"] || "").toLowerCase();
+                    const searchString = lowerName + " " + lowerCat;
+                    const nameWords = searchString.split(/[\s\-\,]+/);
+
+                    let isValid = true;
+                    let relevance = 0;
+
+                    for (const sWord of searchWords) {
+                        let wordMatch = false;
+                        if (searchString.includes(sWord)) {
+                            wordMatch = true;
+                            relevance += 10;
+                        } else {
+                            for (const nWord of nameWords) {
+                                const f = fuzzyMatch(sWord, nWord);
+                                if (f.match) {
+                                    wordMatch = true;
+                                    relevance += f.exact ? 10 : 5;
+                                    break;
+                                }
+                            }
+                        }
+                        if (!wordMatch) {
+                            isValid = false;
+                            break;
+                        }
+                    }
+                    if (isValid) {
+                        fetchedProducts.push({ record: r, relevance });
+                    }
+                });
+
+                // Sort explicitly matching strict matches up toward the top of the buffer
+                fetchedProducts.sort((a, b) => b.relevance - a.relevance);
+                const validRecords = fetchedProducts.map(p => p.record);
+
+                if (validRecords.length === 0) {
+                    loader.style.display = 'none';
+                    resultsGrid.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-icon">🤷</div>
+                            <h3 style="color:var(--text-primary); font-size:18px; margin-bottom:8px;">No matches found</h3>
+                            <p>We couldn't find identical products for "${rawQuery}".</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                const nameMap = {};
+                validRecords.forEach(r => {
+                    nameMap[r.fields["Listing name"]] = r.fields;
+                });
+                const namesQueryArr = Object.keys(nameMap);
+
+                let allMatchedRecords = [];
+                for (let i = 0; i < namesQueryArr.length; i += 20) {
+                    const chunk = namesQueryArr.slice(i, i + 20);
+                    const orArray = chunk.map(n => {
+                        const escaped = n.replace(/"/g, '\\"');
+                        return `OR({Listing A}="${escaped}", {Listing B}="${escaped}")`;
+                    });
+                    const chunkFormula = `AND(Status='Approved', OR(${orArray.join(',')}))`;
+
+                    const matchRes = await fetch(`https://api.airtable.com/v0/${BASE_ID}/Match%20Queue?filterByFormula=${encodeURIComponent(chunkFormula)}`, {
+                        headers: { 'Authorization': `Bearer ${AIRTABLE_TOKEN}` }
+                    });
+                    if (matchRes.ok) {
+                        const mData = await matchRes.json();
+                        allMatchedRecords.push(...mData.records);
+                    }
+                }
+
+                loader.style.display = 'none';
+
+                let renderedNames = new Set();
+                let hasRenderedPrimaryMatches = false;
+
+                const renderCol = (item, isCheapest, singleMode = false) => {
+                    if (!item) return '';
+                    const store = item["Store"] === "Woolworths" ? "woolies" : (item["Store"] === "Chemist Warehouse" ? "chemist" : "coles");
+                    const displayStore = item["Store"] || 'Store';
+                    const price = parseFloat(item["Current price"]);
+                    const formattedPrice = price === Infinity || isNaN(price) ? "N/A" : `$${price.toFixed(2)}`;
+                    const isSpecial = !!item["On special"];
+
+                    return `
+                    <div class="product-col ${isCheapest && !singleMode ? 'cheapest-col' : ''} ${singleMode ? 'single-grid' : ''}">
+                        <div class="store-badge store-${store.toLowerCase()}">${displayStore}</div>
+                        <div class="image-container">
+                            <img src="${item["Image URL"] || 'https://placehold.co/100x100/f4f6f8/6b7280?text=No+Image'}" loading="lazy" onerror="this.onerror=null; this.src='https://placehold.co/100x100/f4f6f8/6b7280?text=No+Image';" alt="${(item["Listing name"] || '').replace(/"/g, '&quot;')}" class="product-image">
+                        </div>
+                        <div class="product-name">${item["Listing name"]}</div>
+                        <div class="price-container">
+                            <div class="price-large">${formattedPrice}</div>
+                            <div class="unit-price">${item["Unit price"] || ''}</div>
+                            ${isSpecial ? `<div class="special-badge">Special</div>` : ''}
+                        </div>
+                    </div>
+                    `;
+                };
+
+                // Parse out valid matched pairs exclusively mapping rendered keys appropriately
+                allMatchedRecords.forEach(match => {
+                    const nameA = match.fields["Listing A"];
+                    const nameB = match.fields["Listing B"];
+
+                    const itemA = nameMap[nameA];
+                    const itemB = nameMap[nameB];
+
+                    // Drop orphaned pairs dynamically mapping exactly out of scope
+                    if (!itemA || !itemB) return;
+
+                    let priceA = parseFloat(itemA["Current price"]) || Infinity;
+                    let priceB = parseFloat(itemB["Current price"]) || Infinity;
+
+                    let cheapest = null;
+                    if (priceA < priceB) cheapest = 'A';
+                    else if (priceB < priceA) cheapest = 'B';
+
+                    const cardNode = document.createElement('div');
+                    cardNode.className = 'match-card';
+                    cardNode.innerHTML = `
+                        <div class="match-title">
+                            <span style="font-size: 14px;">⚖️</span> Direct Match
+                        </div>
+                        <div class="comparison-grid">
+                            ${renderCol(itemA, cheapest === 'A')}
+                            ${renderCol(itemB, cheapest === 'B')}
+                        </div>
+                    `;
+
+                    resultsGrid.appendChild(cardNode);
+                    renderedNames.add(nameA);
+                    renderedNames.add(nameB);
+                    hasRenderedPrimaryMatches = true;
+                });
+
+                // Safe-rendering of un-matched arrays preserving individual card listings cleanly
+                const unRenderedItems = validRecords.filter(r => !renderedNames.has(r.fields["Listing name"]));
+                if (unRenderedItems.length > 0) {
+                    if (hasRenderedPrimaryMatches) {
+                        const dividingTitle = document.createElement('h3');
+                        dividingTitle.style.cssText = "font-size: 16px; margin: 24px 0 16px; color: var(--text-secondary);";
+                        dividingTitle.innerText = "Single Store Results";
+                        resultsGrid.appendChild(dividingTitle);
+                    }
+
+                    unRenderedItems.forEach(r => {
+                        const item = r.fields;
+                        const cardNode = document.createElement('div');
+                        cardNode.className = 'match-card';
+                        cardNode.innerHTML = `
+                            <div class="comparison-grid single-layout">
+                                ${renderCol(item, false, true)}
+                            </div>
+                        `;
+                        resultsGrid.appendChild(cardNode);
+                    });
+                }
+
+            } catch (err) {
+                console.error(err);
+                loader.style.display = 'none';
+                resultsGrid.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">⚠️</div>
+                        <h3 style="color:var(--text-primary); font-size:18px; margin-bottom:8px;">Network Error</h3>
+                        <p>There was a problem pulling live prices. Check your console or Airtable Token.</p>
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,7 @@
+requests
+python-dotenv
+pyairtable
+apify-client
+playwright
+beautifulsoup4
+lxml

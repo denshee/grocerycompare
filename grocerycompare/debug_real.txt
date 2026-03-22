@@ -1,0 +1,24 @@
+Initializing Airtable connection...
+Fetching all listings...
+Comparing products strictly via Python token matching...
+
+=== EXACT AIRTABLE PAYLOAD FOR FIRST MATCH ===
+{
+  "Listing A": "a2 Milk Lactose Free Full Cream 2L",
+  "Listing B": "Farmhouse Gold Full Cream Milk",
+  "AI confidence": 80,
+  "Status": "Approved",
+  "Notes": "Matched via pure python string intersection (3 words)"
+}
+==============================================
+
+Pushing single test payload...
+
+=== AIRTABLE ERROR RESPONSE ===
+Exception: ('422 Client Error: Unprocessable Entity for url: https://api.airtable.com/v0/appryWRqjOFw4EajV/Match%20Queue', '{\'type\': \'INVALID_MULTIPLE_CHOICE_OPTIONS\', \'message\': \'Insufficient permissions to create new select option ""Matched via pure python string intersection (3 words)""\'}')
+{
+  "error": {
+    "type": "INVALID_MULTIPLE_CHOICE_OPTIONS",
+    "message": "Insufficient permissions to create new select option \"\"Matched via pure python string intersection (3 words)\"\""
+  }
+}
