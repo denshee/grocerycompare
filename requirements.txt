@@ -5,3 +5,5 @@ apify-client
 playwright
 beautifulsoup4
 lxml
+flask
+flask-cors

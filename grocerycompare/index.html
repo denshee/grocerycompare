@@ -342,8 +342,8 @@
 
     <!-- CONFIGURATION -->
     <script>
-        const AIRTABLE_TOKEN = "CHANGEME_TOKEN"; // REPLACED AUTOMATICALLY OR MANUALLY
-        const BASE_ID = "appryWRqjOFw4EajV";
+        // Secure API Base URL (Point to your Flask backend)
+        const API_BASE = "http://localhost:5000/api/airtable";
     </script>
 
     <header class="header">
@@ -426,11 +426,6 @@
         });
 
         async function executeSearch(rawQuery) {
-            if (!AIRTABLE_TOKEN || AIRTABLE_TOKEN === "CHANGEME_TOKEN") {
-                resultsGrid.innerHTML = `<div class="empty-state">⚠️ AIRTABLE_TOKEN is missing.</div>`;
-                return;
-            }
-
             resultsGrid.innerHTML = '';
             loader.style.display = 'block';
 
@@ -457,9 +452,9 @@
                 const broadFormula = searchWords.length > 0 ? `OR(${orConditions.join(',')})` : 'TRUE()';
 
                 // Boosted record buffer slightly to offset multi-word filtering dropouts
-                const listingsUrl = `https://api.airtable.com/v0/${BASE_ID}/Listings?filterByFormula=${encodeURIComponent(broadFormula)}&maxRecords=300`;
+                const listingsUrl = `${API_BASE}/Listings?filterByFormula=${encodeURIComponent(broadFormula)}&maxRecords=300`;
 
-                const listingsRes = await fetch(listingsUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_TOKEN}` } });
+                const listingsRes = await fetch(listingsUrl);
                 if (!listingsRes.ok) throw new Error("Airtable API Error");
                 const listingsData = await listingsRes.json();
 
@@ -530,9 +525,7 @@
                     });
                     const chunkFormula = `AND(Status='Approved', OR(${orArray.join(',')}))`;
 
-                    const matchRes = await fetch(`https://api.airtable.com/v0/${BASE_ID}/Match%20Queue?filterByFormula=${encodeURIComponent(chunkFormula)}`, {
-                        headers: { 'Authorization': `Bearer ${AIRTABLE_TOKEN}` }
-                    });
+                    const matchRes = await fetch(`${API_BASE}/Match%20Queue?filterByFormula=${encodeURIComponent(chunkFormula)}`);
                     if (matchRes.ok) {
                         const mData = await matchRes.json();
                         allMatchedRecords.push(...mData.records);
