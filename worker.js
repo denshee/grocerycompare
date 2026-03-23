@@ -37,7 +37,7 @@ export default {
                 terms = terms.map(t => SYNONYMS[t] ? SYNONYMS[t] : t);
 
                 const conditions = terms.map(term => {
-                    return `OR(FIND('${term}', LOWER({Product name}))>0, FIND('${term}', LOWER({Category}))>0)`;
+                    return `OR(FIND("\"${term}\"", LOWER({Product name}))>0, FIND("\"${term}\"", LOWER({Category}))>0)`;
                 });
                 const productFormula = conditions.length === 1 ? conditions[0] : `AND(${conditions.join(', ')})`;
 
@@ -61,7 +61,7 @@ export default {
 
                 for (let i = 0; i < productIds.length; i += chunkSize) {
                     const chunk = productIds.slice(i, i + chunkSize);
-                    const targetStr = chunk.map(id => `FIND('${id}', ARRAYJOIN({Product}))>0`).join(', ');
+                    const targetStr = chunk.map(id => `FIND("\"${id}\"", ARRAYJOIN({Product}))>0`).join(', ');
                     const listFormula = `OR(${targetStr})`;
                     const req = fetch(`https://api.airtable.com/v0/${env.AIRTABLE_BASE_ID}/Listings?fields%5B%5D=Store&fields%5B%5D=Price&fields%5B%5D=Product&filterByFormula=${encodeURIComponent(listFormula)}`, {
                         headers: { 'Authorization': `Bearer ${env.AIRTABLE_TOKEN}` }
