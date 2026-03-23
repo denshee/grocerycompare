@@ -1,4 +1,4 @@
-name = "grocerycompare-api"
+name = "grocerycompare"
 main = "worker.js"
 compatibility_date = "2024-01-01"
 
