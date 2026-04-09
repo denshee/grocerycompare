@@ -105,7 +105,7 @@ def run_scraper():
                         raw_fields = {
                             "Listing name": p_name.strip(),
                             "Store": "Coles",
-                            "Category": category.replace('-', ' ').title(),
+                            # "Category": category.replace('-', ' ').title(),
                             "Image URL": img_url,
                             "Current price": clean_price(price),
                             "Regular price": clean_price(was_price) if was_price else None,

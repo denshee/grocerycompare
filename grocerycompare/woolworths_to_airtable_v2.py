@@ -98,7 +98,7 @@ def run_scraper():
                         raw_fields = {
                             "Listing name": p_name,
                             "Store": "Woolworths",
-                            "Category": category.replace('-', ' ').title(),
+                            # "Category": category.replace('-', ' ').title(),
                             "Image URL": prod.get("MediumImageFile"),
                             "Current price": clean_price(prod.get("Price")),
                             "Regular price": clean_price(prod.get("WasPrice")),

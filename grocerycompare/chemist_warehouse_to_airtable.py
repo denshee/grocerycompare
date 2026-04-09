@@ -133,7 +133,8 @@ def upsert_to_airtable(products, existing_listings):
         }
         
         if image_url: fields['Image URL'] = image_url
-        if category: fields['Category'] = category
+        if category: 
+            pass # fields['Category'] = category - removed because it throws Unknown field name
         
         # Only add price fields if they have valid values
         if current_price is not None and current_price > 0:
@@ -143,18 +144,23 @@ def upsert_to_airtable(products, existing_listings):
             fields['Regular price'] = regular_price
         
         # Check if product exists
-        if product_name in existing_listings:
-            # Update existing record
-            record_id = existing_listings[product_name]
-            update_url = f'{url}/{record_id}'
-            response = requests.patch(update_url, json={'fields': fields}, headers=headers)
-            response.raise_for_status()
-            updated_count += 1
-        else:
-            # Create new record
-            response = requests.post(url, json={'fields': fields}, headers=headers)
-            response.raise_for_status()
-            created_count += 1
+        try:
+            if product_name in existing_listings:
+                # Update existing record
+                record_id = existing_listings[product_name]
+                update_url = f'{url}/{record_id}'
+                response = requests.patch(update_url, json={'fields': fields}, headers=headers)
+                response.raise_for_status()
+                updated_count += 1
+            else:
+                # Create new record
+                response = requests.post(url, json={'fields': fields}, headers=headers)
+                response.raise_for_status()
+                created_count += 1
+        except requests.exceptions.HTTPError as e:
+            print(f"FAILED ON FIELD PAYLOAD: {fields}")
+            print(f"AIRTABLE ERROR TEXT: {e.response.text}")
+            raise
         
         time.sleep(0.2)  # Respect Airtable rate limit
     

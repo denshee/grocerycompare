@@ -1,0 +1,44 @@
+Starting Migration Script (DRY_RUN: True)
+Fetching all records from Listings table...
+Fetched 2573 listings.
+
+Grouped 2573 valid records into 2548 unique products.
+
+--- DRY RUN PREVIEW (First 5 Products) ---
+
+Product: Manning Valley 30 Free Range Eggs 1.65kg
+  Normalized: manning valley 30 free range eggs 1.65kg
+  Category: Uncategorized
+  Size: 1.65kg
+  Image: Yes (https://cdn0.woolworths.media/...)
+  Linked Listings: 1
+
+Product: Novalac AC Colic Infant Formula 800g
+  Normalized: novalac ac colic infant formula 800g
+  Category: Uncategorized
+  Size: 800g
+  Image: No (...)
+  Linked Listings: 1
+
+Product: Colgate Toothpaste Optic White Renewal Teeth Whitening Lasting Fresh 85g
+  Normalized: colgate toothpaste optic white renewal teeth whitening lasting fresh 85g
+  Category: Uncategorized
+  Size: 85g
+  Image: No (...)
+  Linked Listings: 1
+
+Product: Life-Space Womens Microflora Probiotic 60 Capsules
+  Normalized: life-space womens microflora probiotic 60 capsules
+  Category: Uncategorized
+  Size: 
+  Image: No (...)
+  Linked Listings: 1
+
+Product: Pasta Penne
+  Normalized: pasta penne
+  Category: Uncategorized
+  Size: 
+  Image: No (...)
+  Linked Listings: 1
+
+Would create 2548 products and link to existing 2573 listings.
