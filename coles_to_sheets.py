@@ -3,111 +3,150 @@ import requests
 import urllib.parse
 import sheets_helper
 
-def upsert_to_sheets(products, store_name, existing_names, worksheet):
-    created_count = 0
-    updated_count = 0
-    
-    for product in products:
-        display_name = product.get("name")
-        if not display_name: continue
-            
-        pricing = product.get("pricing", {})
-        price = pricing.get("now")
-        was_price = pricing.get("was")
-        is_in_stock = product.get("availability") == True
-        
-        image_url = None
-        image_uris = product.get("imageUris", [])
-        if image_uris and isinstance(image_uris, list) and len(image_uris) > 0:
-            image_url = image_uris[0].get("url")
+# --- Search configuration ---
+# For test mode: 1 page per term (~20 products/term)
+# For full catalogue: increase PAGES_PER_TERM
+PAGES_PER_TERM = 1
+PAGE_SIZE = 20
 
-        if display_name in existing_names:
-            if price is not None and price > 0:
-                success = sheets_helper.update_listing_price(worksheet, display_name, price)
-                if success:
-                    updated_count += 1
-        else:
-            row = [
-                "", # Listing_ID
-                display_name,
-                store_name,
-                price if price else "",
-                was_price if was_price else "",
-                bool(is_in_stock),
-                image_url if image_url else ""
-            ]
-            worksheet.append_row(row)
-            existing_names.add(display_name)
-            created_count += 1
+SEARCH_TERMS = [
+    "milk", "bread", "eggs", "butter", "cheese", "yoghurt",
+    "chicken breast", "beef mince", "rice", "pasta", "cereal",
+    "orange juice", "chips", "chocolate", "coffee", "tea",
+    "toilet paper", "dishwashing liquid"
+]
 
-        time.sleep(1.2) # Throttle Google API
+HEADERS = {
+    "ocp-apim-subscription-key": "eae83861d1cd4de6bb9cd8a2cd6f041e",
+    "x-api-version": "2",
+    "dsch-channel": "coles.online.1site.desktop",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36",
+    "Accept": "application/json",
+    "Referer": "https://www.coles.com.au",
+    "Origin": "https://www.coles.com.au"
+}
 
-    return created_count, updated_count
 
-def main():
-    print("Initializing Coles Google Sheets connection...")
-    worksheet = sheets_helper.get_listings_worksheet()
+def fetch_coles_products(search_terms, pages_per_term=1, page_size=20):
+    """Scrape all products from Coles API.
 
-    search_terms = [
-        "milk", "bread", "eggs", "butter", "cheese", "yoghurt", 
-        "chicken breast", "beef mince", "rice", "pasta", "cereal", 
-        "orange juice", "chips", "chocolate", "coffee", "tea", 
-        "toilet paper", "dishwashing liquid"
-    ]
-
-    headers = {
-        "ocp-apim-subscription-key": "eae83861d1cd4de6bb9cd8a2cd6f041e",
-        "x-api-version": "2",
-        "dsch-channel": "coles.online.1site.desktop",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36",
-        "Accept": "application/json",
-        "Referer": "https://www.coles.com.au",
-        "Origin": "https://www.coles.com.au"
-    }
-
-    print("Fetching existing Coles listings from Google Sheets...")
-    all_records = worksheet.get_all_records()
-    existing_names = {r.get('Product_name') for r in all_records if r.get('Store') == 'Coles' and r.get('Product_name')}
-    print(f"Found {len(existing_names)} existing Coles listings")
-
+    Returns a list of raw product dicts.
+    Sleeps briefly between HTTP requests only (not between sheet writes).
+    """
     all_products = []
+
     for term in search_terms:
         encoded_term = urllib.parse.quote(term)
-        print(f"\n=> Searching Coles for '{term}'...")
-        
-        start = 0
-        url = f"https://www.coles.com.au/api/bff/products/search?storeId=7674&start={start}&sortBy=salesDescending&searchTerm={encoded_term}"
-        
-        try:
-            response = requests.get(url, headers=headers)
-            response.raise_for_status()
-            data = response.json()
-        except requests.RequestException as e:
-            print(f"Error fetching data for '{term}': {e}")
+        for page in range(pages_per_term):
+            start = page * page_size
+            url = (
+                f"https://www.coles.com.au/api/bff/products/search"
+                f"?storeId=7674&start={start}&sortBy=salesDescending&searchTerm={encoded_term}"
+            )
+            print(f"  Fetching Coles '{term}' page {page + 1}...")
+            try:
+                response = requests.get(url, headers=HEADERS, timeout=15)
+                response.raise_for_status()
+                data = response.json()
+            except requests.RequestException as e:
+                print(f"  Error fetching '{term}' page {page + 1}: {e}")
+                continue
+
+            products = []
+            if "results" in data:
+                products = data["results"]
+            elif "products" in data:
+                products = data["products"]
+            elif "pageProps" in data and "searchResults" in data["pageProps"]:
+                products = data["pageProps"]["searchResults"]
+
+            if not products:
+                break  # No more results for this term
+
+            all_products.extend(products)
+            time.sleep(0.5)  # Polite delay between HTTP requests only
+
+    return all_products
+
+
+def build_upsert_data(products, store_name, existing):
+    """Classify scraped products into new rows vs price updates.
+
+    Args:
+        products: list of raw product dicts from the Coles API
+        store_name: str
+        existing: dict from sheets_helper.load_existing_listings()
+
+    Returns:
+        new_rows: list of row lists ready to append
+        price_updates: list of (row_number, price) tuples
+    """
+    new_rows = []
+    price_updates = []
+    seen_names = set()
+
+    for product in products:
+        name = (product.get("name") or "").strip()
+        if not name or name in seen_names:
             continue
+        seen_names.add(name)
 
-        products = []
-        if "results" in data:
-            products = data["results"]
-        elif "products" in data:
-            products = data["products"]
-        elif "pageProps" in data and "searchResults" in data["pageProps"]:
-            products = data["pageProps"]["searchResults"]
+        pricing   = product.get("pricing", {})
+        price     = pricing.get("now")
+        was_price = pricing.get("was")
+        in_stock  = product.get("availability") is True
 
-        all_products.extend(products)
-        time.sleep(0.5)
+        image_url = ""
+        image_uris = product.get("imageUris", [])
+        if isinstance(image_uris, list) and image_uris:
+            image_url = image_uris[0].get("url", "")
 
-    print(f"\n{'='*50}")
-    print(f"Total products collected: {len(all_products)}")
-    
-    print("\nUpserting to Google Sheets...")
-    created, updated = upsert_to_sheets(all_products, "Coles", existing_names, worksheet)
-    
-    print(f"\n{'='*50}")
-    print("COMPLETE!")
-    print(f"Created: {created} new listings")
-    print(f"Updated: {updated} existing listings")
-    print(f"{'='*50}")
+        key = (name, store_name)
+        if key in existing:
+            if price is not None and price > 0:
+                price_updates.append((existing[key], price))
+        else:
+            new_rows.append([
+                "",           # Listing_ID
+                name,
+                store_name,
+                price if price is not None else "",
+                was_price if was_price is not None else "",
+                bool(in_stock),
+                image_url
+            ])
+
+    return new_rows, price_updates
+
+
+def main():
+    print("=" * 50)
+    print("Coles → Google Sheets")
+    print("=" * 50)
+
+    print("\n[1/4] Connecting to Google Sheets...")
+    worksheet = sheets_helper.get_listings_worksheet()
+
+    print("\n[2/4] Loading existing sheet data...")
+    existing = sheets_helper.load_existing_listings(worksheet)
+
+    print(f"\n[3/4] Scraping Coles ({len(SEARCH_TERMS)} terms × {PAGES_PER_TERM} page(s))...")
+    products = fetch_coles_products(SEARCH_TERMS, PAGES_PER_TERM, PAGE_SIZE)
+    print(f"  Total raw products fetched: {len(products)}")
+
+    print("\n[4/4] Classifying and writing to Google Sheets (batch)...")
+    new_rows, price_updates = build_upsert_data(products, "Coles", existing)
+    print(f"  New rows to append : {len(new_rows)}")
+    print(f"  Price updates      : {len(price_updates)}")
+
+    created, updated = sheets_helper.batch_upsert(worksheet, "Coles", new_rows, price_updates)
+
+    print(f"\n{'=' * 50}")
+    print("COLES COMPLETE")
+    print(f"  Created : {created} new listings")
+    print(f"  Updated : {updated} existing prices")
+    print(f"{'=' * 50}")
+
 
 if __name__ == "__main__":
     main()
