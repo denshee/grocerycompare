@@ -1,11 +1,28 @@
+import os
+import json
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
 
 SHEET_ID = '14cci7jorS43qBbAW673-jh_394TPHeCcC4lYAOqIk0k'
 
+SCOPES = [
+    'https://spreadsheets.google.com/feeds',
+    'https://www.googleapis.com/auth/drive'
+]
+
 def get_sheets_client():
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
+    """Create an authenticated gspread client.
+    
+    Loads credentials from the GCP_CREDENTIALS environment variable (JSON string)
+    when running in GitHub Actions, or falls back to credentials.json locally.
+    """
+    gcp_creds_json = os.getenv('GCP_CREDENTIALS')
+    if gcp_creds_json:
+        creds_dict = json.loads(gcp_creds_json)
+        creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+    else:
+        creds = Credentials.from_service_account_file('credentials.json', scopes=SCOPES)
+    
     return gspread.authorize(creds)
 
 def get_listings_worksheet():
