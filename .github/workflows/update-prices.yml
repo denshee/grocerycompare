@@ -25,28 +25,29 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         playwright install chromium
+
+    - name: Create credentials.json
+      run: |
+        echo '${{ secrets.GCP_CREDENTIALS }}' > credentials.json
         
     - name: Run Woolworths Pipeline
       env:
-        AIRTABLE_TOKEN: ${{ secrets.AIRTABLE_TOKEN }}
-        AIRTABLE_BASE_ID: ${{ secrets.AIRTABLE_BASE_ID }}
-      run: python grocerycompare/woolworths_to_airtable.py
+        GOOGLE_SHEET_ID: 14cci7jorS43qBbAW673-jh_394TPHeCcC4lYAOqIk0k
+      run: python woolworths_to_sheets.py
       continue-on-error: true
       id: woolies
 
     - name: Run Coles Pipeline
       env:
-        AIRTABLE_TOKEN: ${{ secrets.AIRTABLE_TOKEN }}
-        AIRTABLE_BASE_ID: ${{ secrets.AIRTABLE_BASE_ID }}
-      run: python grocerycompare/coles_to_airtable.py
+        GOOGLE_SHEET_ID: 14cci7jorS43qBbAW673-jh_394TPHeCcC4lYAOqIk0k
+      run: python coles_to_sheets.py
       continue-on-error: true
       id: coles
 
     - name: Run Chemist Warehouse Pipeline
       env:
-        AIRTABLE_TOKEN: ${{ secrets.AIRTABLE_TOKEN }}
-        AIRTABLE_BASE_ID: ${{ secrets.AIRTABLE_BASE_ID }}
-      run: python grocerycompare/chemist_warehouse_to_airtable.py
+        GOOGLE_SHEET_ID: 14cci7jorS43qBbAW673-jh_394TPHeCcC4lYAOqIk0k
+      run: python chemist_warehouse_to_sheets_v2.py
       continue-on-error: true
       id: chemist
 
