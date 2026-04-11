@@ -37,15 +37,10 @@ jobs:
       continue-on-error: true
       id: woolies_full
 
-    - name: Run Coles Full Catalog Pipeline (When ready)
+    - name: Run Coles Full Catalog Pipeline
       env:
         GOOGLE_SHEET_ID: 14cci7jorS43qBbAW673-jh_394TPHeCcC4lYAOqIk0k
-      run: |
-        if [ -f coles_full_catalog.py ]; then
-          python coles_full_catalog.py
-        else
-          echo "coles_full_catalog.py not found. Skipping."
-        fi
+      run: python coles_full_catalog.py
       continue-on-error: true
       id: coles_full
 
