@@ -13,161 +13,162 @@ export default {
             return new Response(null, { headers: corsHeaders });
         }
 
-        const BASE_ID = env.AIRTABLE_BASE_ID || "appryWRqjOFw4EajV";
-        const TOKEN = env.AIRTABLE_TOKEN;
+        // Google Sheets config
+        const SHEET_ID = env.GOOGLE_SHEET_ID || '14cci7jorS43qBbAW673-jh_394TPHeCcC4lYAOqIk0k';
+        const API_KEY = env.GOOGLE_API_KEY;   // Public read-only API key for Sheets v4
 
-        // Debug endpoint
+        /**
+         * Fetch a range from Google Sheets v4 REST API.
+         * Returns an array of row arrays (first row = headers).
+         * Sheet must be publicly readable (Share → Anyone with link → Viewer).
+         */
+        async function fetchSheetRange(range) {
+            const sheetsUrl = new URL(
+                `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(range)}`
+            );
+            sheetsUrl.searchParams.set('key', API_KEY);
+            const res = await fetch(sheetsUrl.toString());
+            if (!res.ok) {
+                const err = await res.text();
+                throw new Error(`Sheets API error ${res.status}: ${err}`);
+            }
+            const data = await res.json();
+            return data.values || [];   // array of row arrays
+        }
+
+        /**
+         * Parse the Listings sheet into an array of structured objects.
+         * Columns: Listing_ID | Product_name | Store | Current_price | Regular_price | In_stock | Image_URL
+         */
+        function parseListings(rows) {
+            if (rows.length < 2) return [];
+            // row[0] is the header
+            return rows.slice(1).map(row => ({
+                listing_id: row[0] || '',
+                product_name: row[1] || '',
+                store: row[2] || '',
+                current_price: parseFloat(row[3]) || null,
+                regular_price: parseFloat(row[4]) || null,
+                in_stock: (row[5] || '').toString().toLowerCase() !== 'false',
+                image_url: row[6] || ''
+            })).filter(r => r.product_name);
+        }
+
+        /**
+         * Group flat listings by product name, building the same JSON shape
+         * as the previous Airtable implementation:
+         * { id, name, image, prices: [{ store, price, regular_price }] }
+         */
+        function groupByProduct(listings) {
+            const map = new Map();
+            for (const listing of listings) {
+                const key = listing.product_name;
+                if (!map.has(key)) {
+                    map.set(key, {
+                        id: key.toLowerCase().replace(/\s+/g, '-'),
+                        name: listing.product_name,
+                        image: listing.image_url,
+                        prices: []
+                    });
+                }
+                const product = map.get(key);
+                // Keep the best image we have
+                if (!product.image && listing.image_url) {
+                    product.image = listing.image_url;
+                }
+                // Avoid duplicate store entries
+                if (!product.prices.find(p => p.store === listing.store)) {
+                    product.prices.push({
+                        store: listing.store,
+                        price: listing.current_price,
+                        regular_price: listing.regular_price,
+                        in_stock: listing.in_stock
+                    });
+                }
+            }
+            return [...map.values()];
+        }
+
+        // ── Debug endpoint ───────────────────────────────────────────────────────
         if (url.pathname === '/api/debug') {
             return new Response(JSON.stringify({
-                hasToken: !!TOKEN,
-                tokenPrefix: TOKEN ? TOKEN.substring(0, 15) + "..." : "MISSING",
-                baseId: BASE_ID,
+                sheetId: SHEET_ID,
+                hasApiKey: !!API_KEY,
+                apiKeyHint: API_KEY ? API_KEY.substring(0, 8) + '...' : 'MISSING'
             }), { headers: corsHeaders });
         }
 
-        // Test endpoint — returns raw Airtable response for hardcoded "milk" search
+        // ── Test endpoint — returns first 5 raw listings rows ────────────────────
         if (url.pathname === '/api/test') {
-            const formula = 'OR(SEARCH("milk",LOWER({Product name})),SEARCH("milk",LOWER({Category})))';
-            const testUrl = new URL('https://api.airtable.com/v0/' + BASE_ID + '/Products');
-            testUrl.searchParams.set('filterByFormula', formula);
-            testUrl.searchParams.set('maxRecords', '3');
-            const res = await fetch(testUrl.toString(), { headers: { 'Authorization': 'Bearer ' + TOKEN } });
-            const raw = await res.text();
-            return new Response(JSON.stringify({
-                status: res.status,
-                formula: formula,
-                encodedUrl: testUrl.toString(),
-                raw: raw.substring(0, 2000)
-            }), { headers: corsHeaders });
+            try {
+                const rows = await fetchSheetRange('Listings!A1:G6');
+                return new Response(JSON.stringify({ rows }), { headers: corsHeaders });
+            } catch (err) {
+                return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
+            }
         }
 
-        // /api/search?q=milk
+        // ── /api/search?q=milk ───────────────────────────────────────────────────
         if (url.pathname === '/api/search') {
             try {
                 const query = url.searchParams.get('q');
                 if (!query) {
-                    return new Response(JSON.stringify({ error: "Missing query parameter 'q'" }), { status: 400, headers: corsHeaders });
+                    return new Response(
+                        JSON.stringify({ error: "Missing query parameter 'q'" }),
+                        { status: 400, headers: corsHeaders }
+                    );
                 }
 
+                // Synonym expansion
                 const SYNONYMS = {
                     'lf': 'lactose free',
                     'fc': 'full cream',
                     'cw': 'chemist warehouse',
                     'ww': 'woolworths'
                 };
+                const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
+                    .map(t => SYNONYMS[t] ?? t);
 
-                let terms = query.toLowerCase().split(' ').filter(t => t.trim().length > 0);
-                terms = terms.map(t => SYNONYMS[t] ? SYNONYMS[t] : t);
+                // Fetch the full Listings sheet (one API call)
+                const rows = await fetchSheetRange('Listings!A:G');
+                const allListings = parseListings(rows);
 
-                // Build formula using SEARCH() which doesn't require field name quoting issues
-                // Use string concatenation instead of template literals to avoid encoding problems
-                const conditions = terms.map(term => {
-                    return 'SEARCH("' + term + '", LOWER({Product name})) > 0';
-                });
-                const productFormula = conditions.length === 1
-                    ? conditions[0]
-                    : 'AND(' + conditions.join(',') + ')';
-
-                // Build URL manually to control encoding precisely
-                // Airtable needs the formula URL-encoded but NOT double-encoded
-                const productsUrl = new URL('https://api.airtable.com/v0/' + BASE_ID + '/Products');
-                productsUrl.searchParams.set('filterByFormula', productFormula);
-                productsUrl.searchParams.set('maxRecords', '100');
-
-                const productsRes = await fetch(productsUrl.toString(), {
-                    headers: { 'Authorization': 'Bearer ' + TOKEN }
+                // Filter: every search term must appear somewhere in the product name
+                const matched = allListings.filter(listing => {
+                    const haystack = listing.product_name.toLowerCase();
+                    return terms.every(term => haystack.includes(term));
                 });
 
-                if (!productsRes.ok) {
-                    const errText = await productsRes.text();
-                    return new Response(JSON.stringify({
-                        error: 'Airtable Products error: ' + productsRes.status,
-                        detail: errText,
-                        formula: productFormula
-                    }), { headers: corsHeaders });
-                }
+                // Group into products with price comparisons
+                const products = groupByProduct(matched)
+                    .filter(p => p.prices.length > 0)
+                    // Sort: most stores (best comparison) first
+                    .sort((a, b) => b.prices.length - a.prices.length);
 
-                const productsData = await productsRes.json();
-                const products = productsData.records;
-
-                if (!products || products.length === 0) {
-                    return new Response(JSON.stringify({
-                        products: [],
-                        debug: { formula: productFormula, baseId: BASE_ID }
-                    }), { headers: corsHeaders });
-                }
-
-                // Fetch linked Listings in parallel chunks
-                const productIds = products.map(p => p.id);
-                const chunkSize = 20;
-                const listingPromises = [];
-
-                for (let i = 0; i < productIds.length; i += chunkSize) {
-                    const chunk = products.slice(i, i + chunkSize);
-                    const targetStr = chunk.map(p => 'FIND("' + p.fields['Product name'] + '",ARRAYJOIN({Product}))>0').join(',');
-                    const listFormula = 'OR(' + targetStr + ')';
-
-                    const listUrl = new URL('https://api.airtable.com/v0/' + BASE_ID + '/Listings');
-                    listUrl.searchParams.set('filterByFormula', listFormula);
-                    listUrl.searchParams.set('fields[]', 'Store');
-                    listUrl.searchParams.append('fields[]', 'Current price');
-                    listUrl.searchParams.append('fields[]', 'Product');
-
-                    listingPromises.push(
-                        fetch(listUrl.toString(), { headers: { 'Authorization': 'Bearer ' + TOKEN } })
-                    );
-                }
-
-                const listResponses = await Promise.all(listingPromises);
-                let allListings = [];
-                for (const res of listResponses) {
-                    const data = await res.json();
-                    if (data.records) allListings = allListings.concat(data.records);
-                }
-
-                // Map listings to products
-                const productListingsMap = {};
-                allListings.forEach(listRecord => {
-                    const fields = listRecord.fields;
-                    if (fields.Product && fields.Product.length > 0) {
-                        fields.Product.forEach(pid => {
-                            if (!productListingsMap[pid]) productListingsMap[pid] = [];
-                            if (!productListingsMap[pid].find(l => l.store === fields.Store)) {
-                                productListingsMap[pid].push({
-                                    store: fields.Store,
-                                    price: parseFloat(fields['Current price'])
-                                });
-                            }
-                        });
-                    }
-                });
-
-                const finalProducts = products.map(p => ({
-                    id: p.id,
-                    name: p.fields['Product name'] || 'Unknown Product',
-                    size: p.fields['Weight / volume'] || '',
-                    image: p.fields['Primary_Image'] || '',
-                    prices: productListingsMap[p.id] || []
-                })).filter(p => p.prices.length > 0);
-
-                return new Response(JSON.stringify({ products: finalProducts, debug: { formula: productFormula, baseId: BASE_ID } }), { headers: corsHeaders });
+                return new Response(JSON.stringify({
+                    products,
+                    debug: { query, terms, totalListings: allListings.length, matched: matched.length }
+                }), { headers: corsHeaders });
 
             } catch (err) {
-                return new Response(JSON.stringify({ error: err.message, stack: err.stack }), { status: 500, headers: corsHeaders });
+                return new Response(
+                    JSON.stringify({ error: err.message, stack: err.stack }),
+                    { status: 500, headers: corsHeaders }
+                );
             }
         }
 
-        // Legacy proxy: /api/airtable/*
-        if (url.pathname.startsWith('/api/airtable/')) {
-            const path = url.pathname.replace('/api/airtable/', '');
-            const airtableUrl = 'https://api.airtable.com/v0/' + BASE_ID + '/' + path + url.search;
-            const response = await fetch(airtableUrl, {
-                headers: { 'Authorization': 'Bearer ' + TOKEN }
-            });
-            const data = await response.json();
-            return new Response(JSON.stringify(data), { headers: corsHeaders });
+        // ── /api/stores — list all stores present in the sheet ──────────────────
+        if (url.pathname === '/api/stores') {
+            try {
+                const rows = await fetchSheetRange('Listings!C:C');   // Store column only
+                const stores = [...new Set(rows.slice(1).map(r => r[0]).filter(Boolean))].sort();
+                return new Response(JSON.stringify({ stores }), { headers: corsHeaders });
+            } catch (err) {
+                return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
+            }
         }
 
-        return new Response(JSON.stringify({ error: "Endpoint not found" }), { status: 404, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'Endpoint not found' }), { status: 404, headers: corsHeaders });
     }
 };
