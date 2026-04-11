@@ -2,8 +2,8 @@ name: Weekly Grocery Price Sync
 
 on:
   schedule:
-    # 11:00 PM AWST (Perth Time) is 3:00 PM UTC. Runs Every Sunday.
-    - cron: '0 15 * * 0'
+    # 11:00 PM AWST (Perth Time) is 3:00 PM UTC. Runs Every Wednesday.
+    - cron: '0 15 * * 3'
   workflow_dispatch:
 
 jobs:
