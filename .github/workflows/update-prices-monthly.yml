@@ -44,11 +44,19 @@ jobs:
       continue-on-error: true
       id: coles_full
 
+    - name: Run Aldi Full Catalog Pipeline
+      env:
+        GOOGLE_SHEET_ID: 14cci7jorS43qBbAW673-jh_394TPHeCcC4lYAOqIk0k
+      run: python aldi_full_catalog.py
+      continue-on-error: true
+      id: aldi_full
+
     - name: Error Handling & Trigger Notifications
-      if: steps.woolies_full.outcome == 'failure' || steps.coles_full.outcome == 'failure'
+      if: steps.woolies_full.outcome == 'failure' || steps.coles_full.outcome == 'failure' || steps.aldi_full.outcome == 'failure'
       run: |
         echo "🚨 CRITICAL ERROR: The monthly full catalog pipeline failed!"
         echo "- Woolworths Full Catalog: ${{ steps.woolies_full.outcome }}"
         echo "- Coles Full Catalog: ${{ steps.coles_full.outcome }}"
+        echo "- Aldi Full Catalog: ${{ steps.aldi_full.outcome }}"
         echo "Failing the Github workflow deliberately to trigger the native email notification to the repository owner!"
         exit 1
