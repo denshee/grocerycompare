@@ -3,20 +3,11 @@ aldi_full_catalog.py
 --------------------
 Heavy monthly scraper: browses ALL Aldi AU core grocery categories via Playwright
 DOM extraction and writes every product to Google Sheets.
-
-Strategy
---------
-1. Launch Chromium via Playwright.
-2. Iterate through core Aldi Grocery Category URLs (discovered via sitemap).
-3. For each category, scrape product tiles (div.product-tile).
-4. Normalise pricing ($1.23 or 80c handled).
-5. Batch write to Google Sheets using sheets_helper (500 items per flush).
 """
 
 import argparse
 import re
-import sys
-import time
+from datetime import datetime
 import sheets_helper
 
 # ── Configuration ─────────────────────────────────────────────────────────────
@@ -26,7 +17,6 @@ BATCH_WRITE_EVERY = 500
 
 ALDI_BASE = "https://www.aldi.com.au"
 
-# Curated grocery-specific category URLs from sitemap exploration
 ALDI_CATEGORIES = [
     ALDI_BASE + "/products/fruits-vegetables/k/950000000",
     ALDI_BASE + "/products/meat-seafood/k/940000000",
@@ -44,78 +34,67 @@ ALDI_CATEGORIES = [
     ALDI_BASE + "/products/snacks-confectionery/k/1588161408332087",
 ]
 
-# ── Normalization Helpers ────────────────────────────────────────────────────
-
 def clean_price(price_text: str) -> float | None:
     """Handles '$1.23', '80c', '1.23', etc."""
-    if not price_text:
-        return None
-    
-    # Check for cents format (e.g. 80c)
+    if not price_text: return None
     if 'c' in price_text.lower():
         digits = re.sub(r'[^\d]', '', price_text)
-        if digits:
-            return float(digits) / 100.0
-            
-    # Standard dollar format ($1.23)
+        return float(digits) / 100.0 if digits else None
     cleaned = re.sub(r'[^\d.]', '', price_text)
     try:
-        if cleaned:
-            return float(cleaned)
-    except (ValueError, TypeError):
-        pass
-    return None
-
-# ── Batch Write Helper ───────────────────────────────────────────────────────
+        return float(cleaned) if cleaned else None
+    except:
+        return None
 
 def batch_write(worksheet, products_buffer: list[dict],
                 existing: dict, written_names: set) -> tuple[int, int]:
-    """Classify buffered products and flush to Google Sheets."""
+    """Classify buffered products and flush to Google Sheets with history logs."""
     new_rows      = []
     price_updates = []
+    history_rows  = []
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     for p in products_buffer:
         name = p["name"]
-        if name in written_names:
-            continue
+        if name in written_names: continue
 
         key = (name, STORE_NAME)
         if key in existing:
-            if p["price"] is not None and p["price"] > 0:
-                price_updates.append((existing[key], p["price"]))
+            old_data = existing[key]
+            price_changed = (p["price"] is not None and p["price"] != old_data['price'])
+            # Aldi rarely has reg_price in catalog, but we check if it exists
+            reg_price_changed = (p["was_price"] is not None and p["was_price"] != old_data['reg_price'])
+
+            if price_changed or reg_price_changed:
+                price_updates.append((old_data['row'], p["price"], p["was_price"]))
+                history_rows.append([now_str, name, STORE_NAME, p["price"], p["was_price"] or ""])
         else:
             new_rows.append([
-                "",                              # Listing_ID
-                name,
-                STORE_NAME,
+                "", name, STORE_NAME,
                 p["price"] if p["price"] is not None else "",
                 p["was_price"] if p["was_price"] is not None else "",
-                p["in_stock"],
-                p["image"],
+                p["in_stock"], p["image"],
             ])
-            # Locally mark as -1 to avoid duplicates in SAME run
-            existing[key] = -1
+            history_rows.append([now_str, name, STORE_NAME, p["price"] if p["price"] is not None else "", p["was_price"] or ""])
+            existing[key] = {'row': -1, 'price': p["price"], 'reg_price': p["was_price"]}
 
         written_names.add(name)
 
     created, updated = sheets_helper.batch_upsert(
-        worksheet, STORE_NAME, new_rows, price_updates
+        worksheet, STORE_NAME, new_rows, price_updates, history_rows
     )
     return created, updated
 
-# ── Main ──────────────────────────────────────────────────────────────────────
-
 def main():
     parser = argparse.ArgumentParser(description="Aldi full catalogue scraper")
-    parser.add_argument("--dry-run", action="store_true", help="Don't write to Sheets")
+    parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
     print("=" * 60)
-    print("Aldi AU Full Catalogue → Google Sheets")
+    print("Aldi Full Catalogue → Google Sheets (+ History)")
     print("=" * 60)
 
-    # 1. Connect to Sheets
-    print("\n[Phase 1] Connecting to Google Sheets...")
+    print("\n[Phase 1] Connecting to Sheets...")
     worksheet = None
     existing  = {}
     if not args.dry_run:
@@ -123,114 +102,68 @@ def main():
         existing  = sheets_helper.load_existing_listings(worksheet)
 
     buffer = []
-    written_names: set[str] = set()
+    written_names = set()
     total_created = 0
     total_updated = 0
-    total_scraped = 0
 
     from playwright.sync_api import sync_playwright
-
-    print(f"\n[Phase 2] Booting Playwright to scrape {len(ALDI_CATEGORIES)} Categories...")
+    print(f"\n[Phase 2] Booting Playwright...")
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=True,
-            args=["--no-sandbox", "--disable-dev-shm-usage"]
-        )
+        browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36",
-            # Block unnecessary resources for speed
             viewport={"width": 1280, "height": 800}
         )
         page = context.new_page()
 
-        for cat_idx, url in enumerate(ALDI_CATEGORIES, 1):
+        for url in ALDI_CATEGORIES:
             category_name = url.split('/')[-3]
-            print(f"\n  [{cat_idx}/{len(ALDI_CATEGORIES)}] Category: {category_name}")
-            
+            print(f"  Category: {category_name}")
             try:
                 page.goto(url, wait_until="domcontentloaded", timeout=30_000)
-                # Wait for tiles to hydrated
                 page.wait_for_timeout(2000)
-            except Exception as e:
-                print(f"    ✗ Error loading {category_name}: {e}")
-                continue
-
-            # Aldi core range usually hasn't got heavy pagination, but if it does:
-            # We scrape the current view.
-            
-            tiles = page.locator("div.product-tile").all()
-            print(f"    Found {len(tiles)} product tiles")
-            
-            products_on_page = 0
-            for tile in tiles:
-                try:
-                    # Selectors identified via research phase
-                    name_el = tile.locator(".product-tile__name p").first
-                    price_el = tile.locator(".base-price__regular span").first
-                    img_el = tile.locator(".product-tile__picture img").first
-                    
-                    if not name_el.is_visible() or not price_el.is_visible():
-                        continue
+                tiles = page.locator("div.product-tile").all()
+                products_on_page = 0
+                for tile in tiles:
+                    try:
+                        name_el = tile.locator(".product-tile__name p").first
+                        price_el = tile.locator(".base-price__regular span").first
+                        if not name_el.is_visible() or not price_el.is_visible(): continue
                         
-                    name = name_el.inner_text().strip()
-                    price_str = price_el.inner_text().strip()
-                    price = clean_price(price_str)
-                    
-                    # Brand extraction (optional, but good for uniqueness)
-                    brand = ""
-                    if tile.locator(".product-tile__brandname p").is_visible():
-                        brand = tile.locator(".product-tile__brandname p").first.inner_text().strip()
-                        if brand:
-                            name = f"{brand} {name}"
+                        name = name_el.inner_text().strip()
+                        brand = ""
+                        if tile.locator(".product-tile__brandname p").is_visible():
+                            brand = tile.locator(".product-tile__brandname p").first.inner_text().strip()
+                        if brand: name = f"{brand} {name}"
+                        
+                        price = clean_price(price_el.inner_text().strip())
+                        img_url = tile.locator(".product-tile__picture img").first.get_attribute("src") or ""
+                        if img_url.startswith("//"): img_url = "https:" + img_url
 
-                    img_url = img_el.get_attribute("src") or ""
-                    if img_url and img_url.startswith("//"):
-                        img_url = "https:" + img_url
-
-                    if name and price:
-                        buffer.append({
-                            "name": name,
-                            "price": price,
-                            "was_price": None, # Aldi rarely shows simple was_price in catalog
-                            "in_stock": True,
-                            "image": img_url
-                        })
-                        products_on_page += 1
-                except Exception:
-                    continue
-
-            total_scraped += products_on_page
-            print(f"    → Extracted {products_on_page} items from {category_name}")
+                        if name and price:
+                            buffer.append({"name": name, "price": price, "was_price": None, "in_stock": True, "image": img_url})
+                            products_on_page += 1
+                    except: pass
+                print(f"    → Found {products_on_page} items")
+            except: continue
 
             if not args.dry_run and len(buffer) >= BATCH_WRITE_EVERY:
-                print(f"\n  ══ Flushing {len(buffer)} products to Sheets... ══")
+                print(f"  ══ Flushing {len(buffer)} items... ══")
                 c, u = batch_write(worksheet, buffer, existing, written_names)
                 total_created += c
                 total_updated += u
                 buffer = []
-                print(f"  ══ Flush done: +{c} new, ~{u} updated ══\n")
 
         browser.close()
 
-    # Final flush
     if not args.dry_run and buffer:
-        print(f"\n[Phase 3] Final flush: {len(buffer)} products...")
+        print(f"  ══ Final Flush: {len(buffer)} items... ══")
         c, u = batch_write(worksheet, buffer, existing, written_names)
         total_created += c
         total_updated += u
 
-    print(f"\n{'=' * 60}")
-    print("ALDI FULL CATALOGUE COMPLETE")
-    print(f"  Categories scraped : {len(ALDI_CATEGORIES)}")
-    print(f"  Raw products seen  : {total_scraped}")
-    print(f"  Unique processed   : {len(written_names)}")
-    if not args.dry_run:
-        print(f"  Created in Sheets  : {total_created}")
-        print(f"  Updated in Sheets  : {total_updated}")
-    else:
-        print("  Sheets writes      : SKIPPED (dry run)")
-    print(f"{'=' * 60}")
+    print(f"\nCOMPLETED. Created: {total_created} | Updated: {total_updated}")
 
 if __name__ == "__main__":
     main()

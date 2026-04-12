@@ -1,11 +1,10 @@
 import time
 import requests
 import urllib.parse
+from datetime import datetime
 import sheets_helper
 
 # --- Search configuration ---
-# For test mode: 1 page per term (~36 products/term)
-# For full catalogue: increase PAGES_PER_TERM (each page = up to 36 products)
 PAGES_PER_TERM = 1
 PAGE_SIZE = 36
 
@@ -18,11 +17,7 @@ SEARCH_TERMS = [
 
 
 def fetch_woolworths_products(search_terms, pages_per_term=1, page_size=36):
-    """Scrape all products from Woolworths API.
-
-    Returns a list of raw product dicts.
-    Sleeps briefly between HTTP requests only (not between sheet writes).
-    """
+    """Scrape all products from Woolworths API."""
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/115.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
@@ -55,27 +50,18 @@ def fetch_woolworths_products(search_terms, pages_per_term=1, page_size=36):
             for bundle in bundles:
                 all_products.extend(bundle.get("Products", []))
 
-            time.sleep(0.5)  # Polite delay between HTTP requests only
+            time.sleep(0.5)
 
     return all_products
 
 
 def build_upsert_data(products, store_name, existing):
-    """Classify scraped products into new rows vs price updates.
-
-    Args:
-        products: list of raw product dicts from the Woolworths API
-        store_name: str
-        existing: dict from sheets_helper.load_existing_listings()
-
-    Returns:
-        new_rows: list of row lists ready to append
-        price_updates: list of (row_number, price) tuples
-        seen_names: set of product names processed (for dedup within batch)
-    """
+    """Classify scraped products into new rows, price updates, and history logs."""
     new_rows = []
     price_updates = []
+    history_rows = []
     seen_names = set()
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     for product in products:
         if not product.get("IsAvailable"):
@@ -93,11 +79,18 @@ def build_upsert_data(products, store_name, existing):
 
         key = (name, store_name)
         if key in existing:
-            # Existing product — queue a price update
-            if price is not None and price > 0:
-                price_updates.append((existing[key], price))
+            # Existing product — check if price changed
+            old_data = existing[key]
+            price_changed = (price is not None and price != old_data['price'])
+            reg_price_changed = (was_price is not None and was_price != old_data['reg_price'])
+
+            if price_changed or reg_price_changed:
+                print(f"  [Price Change] {name}: ${old_data['price']} -> ${price}")
+                price_updates.append((old_data['row'], price, was_price))
+                # Log to history
+                history_rows.append([now_str, name, store_name, price, was_price or ""])
         else:
-            # New product — queue a full row append
+            # New product
             new_rows.append([
                 "",           # Listing_ID
                 name,
@@ -107,36 +100,43 @@ def build_upsert_data(products, store_name, existing):
                 bool(in_stock),
                 image_url or ""
             ])
+            # Log initial price to history
+            history_rows.append([now_str, name, store_name, price if price is not None else "", was_price or ""])
 
-    return new_rows, price_updates
+    return new_rows, price_updates, history_rows
 
 
 def main():
     print("=" * 50)
-    print("Woolworths → Google Sheets")
+    print("Woolworths → Google Sheets (+ Price History)")
     print("=" * 50)
 
-    print("\n[1/3] Connecting to Google Sheets...")
+    print("\n[1/4] Connecting to Google Sheets...")
     worksheet = sheets_helper.get_listings_worksheet()
 
-    print("\n[2/3] Loading existing sheet data...")
+    print("\n[2/4] Loading existing sheet data...")
     existing = sheets_helper.load_existing_listings(worksheet)
 
-    print(f"\n[3/3] Scraping Woolworths ({len(SEARCH_TERMS)} terms × {PAGES_PER_TERM} page(s))...")
+    print(f"\n[3/4] Scraping Woolworths ({len(SEARCH_TERMS)} terms)...")
     products = fetch_woolworths_products(SEARCH_TERMS, PAGES_PER_TERM, PAGE_SIZE)
     print(f"  Total raw products fetched: {len(products)}")
 
     print("\n[4/4] Classifying and writing to Google Sheets (batch)...")
-    new_rows, price_updates = build_upsert_data(products, "Woolworths", existing)
-    print(f"  New rows to append : {len(new_rows)}")
-    print(f"  Price updates      : {len(price_updates)}")
+    new_rows, price_updates, history_rows = build_upsert_data(products, "Woolworths", existing)
+    
+    print(f"  New rows to append   : {len(new_rows)}")
+    print(f"  Price updates        : {len(price_updates)}")
+    print(f"  History logs to append: {len(history_rows)}")
 
-    created, updated = sheets_helper.batch_upsert(worksheet, "Woolworths", new_rows, price_updates)
+    created, updated = sheets_helper.batch_upsert(
+        worksheet, "Woolworths", new_rows, price_updates, history_rows
+    )
 
     print(f"\n{'=' * 50}")
     print("WOOLWORTHS COMPLETE")
     print(f"  Created : {created} new listings")
     print(f"  Updated : {updated} existing prices")
+    print(f"  Logged  : {len(history_rows)} history entries")
     print(f"{'=' * 50}")
 
 

@@ -158,12 +158,79 @@ export default {
             }
         }
 
-        // ── /api/stores — list all stores present in the sheet ──────────────────
-        if (url.pathname === '/api/stores') {
+        // ── /api/price-history?product=X ─────────────────────────────────────────
+        if (url.pathname === '/api/price-history') {
             try {
-                const rows = await fetchSheetRange('Listings!C:C');   // Store column only
-                const stores = [...new Set(rows.slice(1).map(r => r[0]).filter(Boolean))].sort();
-                return new Response(JSON.stringify({ stores }), { headers: corsHeaders });
+                const product = url.searchParams.get('product');
+                if (!product) {
+                    return new Response(
+                        JSON.stringify({ error: "Missing 'product' parameter" }),
+                        { status: 400, headers: corsHeaders }
+                    );
+                }
+
+                // Fetch full history (Date | Product_name | Store | Price | Regular_price)
+                const rows = await fetchSheetRange('Price_History!A:E');
+                if (rows.length < 2) {
+                    return new Response(JSON.stringify({ history: [], stats: {} }), { headers: corsHeaders });
+                }
+
+                // Filter by exact product name
+                const history = rows.slice(1)
+                    .filter(row => row[1] === product)
+                    .map(row => ({
+                        date: row[0],
+                        store: row[2],
+                        price: parseFloat(row[3]) || 0,
+                        regular_price: parseFloat(row[4]) || null
+                    }))
+                    .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+                if (history.length === 0) {
+                    return new Response(JSON.stringify({ history: [], stats: {} }), { headers: corsHeaders });
+                }
+
+                // Calculate stats per store
+                const statsByStore = {};
+                const stores = [...new Set(history.map(h => h.store))];
+
+                for (const store of stores) {
+                    const storeHistory = history.filter(h => h.store === store);
+                    const prices = storeHistory.map(h => h.price).filter(p => p > 0);
+
+                    const minPrice = Math.min(...prices);
+                    const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
+
+                    // Trend: Compare last 2 unique points for this store
+                    let trend = 'stable';
+                    let pctChange = 0;
+                    if (storeHistory.length >= 2) {
+                        const last = storeHistory[storeHistory.length - 1].price;
+                        const prev = storeHistory[storeHistory.length - 2].price;
+                        if (last > prev) {
+                            trend = 'up';
+                            pctChange = ((last - prev) / prev) * 100;
+                        } else if (last < prev) {
+                            trend = 'down';
+                            pctChange = ((prev - last) / prev) * 100;
+                        }
+                    }
+
+                    statsByStore[store] = {
+                        min_price: minPrice,
+                        avg_price: parseFloat(avgPrice.toFixed(2)),
+                        current_price: storeHistory[storeHistory.length - 1].price,
+                        trend,
+                        pct_change: parseFloat(pctChange.toFixed(1))
+                    };
+                }
+
+                return new Response(JSON.stringify({
+                    product,
+                    history,
+                    stats: statsByStore
+                }), { headers: corsHeaders });
+
             } catch (err) {
                 return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
             }

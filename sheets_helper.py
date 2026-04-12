@@ -1,6 +1,7 @@
 import os
 import json
 import time
+from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
 
@@ -21,11 +22,7 @@ COL_IN_STOCK     = 6
 COL_IMAGE_URL    = 7
 
 def get_sheets_client():
-    """Create an authenticated gspread client.
-
-    In GitHub Actions, reads credentials from GCP_CREDENTIALS env var (JSON string).
-    Locally, falls back to credentials.json file.
-    """
+    """Create an authenticated gspread client."""
     gcp_creds_json = os.getenv('GCP_CREDENTIALS')
     if gcp_creds_json:
         creds_dict = json.loads(gcp_creds_json)
@@ -42,70 +39,120 @@ def get_listings_worksheet():
     return sheet.worksheet('Listings')
 
 
+def get_history_worksheet():
+    """Return the Price_History worksheet object."""
+    client = get_sheets_client()
+    sheet = client.open_by_key(SHEET_ID)
+    try:
+        return sheet.worksheet('Price_History')
+    except gspread.WorksheetNotFound:
+        # Fallback if someone deleted it
+        return sheet.add_worksheet(title="Price_History", rows=1000, cols=5)
+
+
 def load_existing_listings(worksheet):
     """Load all existing rows into a dict for fast lookup.
 
     Returns:
-        dict: {(product_name, store): row_number (1-based, header = row 1)}
+        dict: {(product_name, store): {
+            'row': row_number,
+            'price': current_price (float or None),
+            'reg_price': regular_price (float or None)
+        }}
     """
     print("  Loading existing sheet data (1 API read)...")
-    all_values = worksheet.get_all_values()  # Returns list of lists (no parsing)
+    all_values = worksheet.get_all_values()
     existing = {}
     if len(all_values) < 2:
-        return existing  # empty or header-only
-    # Row 1 is header, data starts at row 2
+        return existing
+        
     for i, row in enumerate(all_values[1:], start=2):
         if len(row) >= 3:
             name  = row[COL_PRODUCT_NAME - 1].strip()
             store = row[COL_STORE - 1].strip()
+            
+            price = None
+            if len(row) >= COL_CURRENT_PRICE:
+                p_val = row[COL_CURRENT_PRICE - 1].replace('$', '').replace(',', '').strip()
+                try:
+                    price = float(p_val) if p_val else None
+                except ValueError:
+                    price = None
+            
+            reg_price = None
+            if len(row) >= COL_REGULAR_PRICE:
+                rp_val = row[COL_REGULAR_PRICE - 1].replace('$', '').replace(',', '').strip()
+                try:
+                    reg_price = float(rp_val) if rp_val else None
+                except ValueError:
+                    reg_price = None
+
             if name and store:
-                existing[(name, store)] = i
+                existing[(name, store)] = {
+                    'row': i,
+                    'price': price,
+                    'reg_price': reg_price
+                }
     print(f"  Found {len(existing)} existing listings in sheet.")
     return existing
 
 
-def batch_upsert(worksheet, store_name, new_rows, price_updates):
-    """Write all new rows and price updates in bulk.
+def batch_upsert(worksheet, store_name, new_rows, price_updates, history_rows=None):
+    """Write all new rows, price updates, and history logs in bulk.
 
     Args:
-        worksheet: gspread Worksheet object
-        store_name: str, for logging
-        new_rows: list of lists — full rows to append (new products)
-        price_updates: list of (row_number, price) tuples — existing products to update
+        worksheet: gspread Worksheet object (Listings)
+        store_name: str
+        new_rows: list of lists
+        price_updates: list of (row_number, price, [optional reg_price]) tuples
+        history_rows: list of lists to append to Price_History
     """
     created = 0
     updated = 0
 
-    # --- Append all new rows in one call ---
+    # 1. Append new rows to Listings
     if new_rows:
-        print(f"  Appending {len(new_rows)} new {store_name} rows (1 API call)...")
+        print(f"  Appending {len(new_rows)} new {store_name} rows...")
         worksheet.append_rows(new_rows, value_input_option='USER_ENTERED')
         created = len(new_rows)
-        # Small pause between the two write calls to stay within quota
-        if price_updates:
-            time.sleep(2)
+        time.sleep(1)
 
-    # --- Batch update all prices in one call ---
+    # 2. Update existing prices in Listings
     if price_updates:
-        print(f"  Updating {len(price_updates)} existing {store_name} prices (1 API call)...")
+        print(f"  Updating {len(price_updates)} existing {store_name} prices...")
         batch_data = []
-        for row_num, price in price_updates:
+        for update in price_updates:
+            row_num = update[0]
+            price = update[1]
+            
+            # Update Current Price
             cell = gspread.utils.rowcol_to_a1(row_num, COL_CURRENT_PRICE)
-            batch_data.append({
-                'range': cell,
-                'values': [[price]]
-            })
+            batch_data.append({'range': cell, 'values': [[price]]})
+            
+            # Update Regular Price if provided
+            if len(update) > 2:
+                reg_price = update[2]
+                reg_cell = gspread.utils.rowcol_to_a1(row_num, COL_REGULAR_PRICE)
+                batch_data.append({'range': reg_cell, 'values': [[reg_price]]})
+
         worksheet.batch_update(batch_data, value_input_option='USER_ENTERED')
         updated = len(price_updates)
+        time.sleep(1)
+
+    # 3. Append to Price_History
+    if history_rows:
+        print(f"  Logging {len(history_rows)} price changes to Price_History...")
+        history_ws = get_history_worksheet()
+        history_ws.append_rows(history_rows, value_input_option='USER_ENTERED')
 
     return created, updated
 
 
-# --- Legacy helper kept for backwards compatibility ---
 def update_listing_price(worksheet, listing_name, new_price):
-    """Single-cell price update. Prefer batch_upsert for bulk operations."""
+    """Legacy single-cell update."""
     cell = worksheet.find(listing_name)
     if cell:
-        worksheet.update_cell(cell.row, COL_CURRENT_PRICE, new_price)
+        worksheet.update(range_name=gspread.utils.rowcol_to_a1(cell.row, COL_CURRENT_PRICE), 
+                         values=[[new_price]])
         return True
     return False
