@@ -123,7 +123,6 @@ export default {
                 const SYNONYMS = {
                     'lf': 'lactose free',
                     'fc': 'full cream',
-                    'cw': 'chemist warehouse',
                     'ww': 'woolworths'
                 };
                 const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
@@ -141,6 +140,10 @@ export default {
 
                 // Group into products with price comparisons
                 const products = groupByProduct(matched)
+                    .map(p => {
+                        p.prices = p.prices.filter(pr => pr.store !== "Chemist Warehouse");
+                        return p;
+                    })
                     .filter(p => p.prices.length > 0)
                     // Sort: most stores (best comparison) first
                     .sort((a, b) => b.prices.length - a.prices.length);
@@ -229,6 +232,140 @@ export default {
                     product,
                     history,
                     stats: statsByStore
+                }), { headers: corsHeaders });
+
+            } catch (err) {
+                return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
+            }
+        }
+
+        // ── /api/list/compare (POST) ─────────────────────────────────────────────
+        if (url.pathname === '/api/list/compare') {
+            if (request.method !== 'POST') {
+                return new Response(JSON.stringify({ error: 'Method not allowed. Use POST.' }), { status: 405, headers: corsHeaders });
+            }
+
+            try {
+                const body = await request.json();
+                const productQueries = body.products || [];
+                if (!Array.isArray(productQueries) || productQueries.length === 0) {
+                    return new Response(JSON.stringify({ error: 'Invalid or empty products list' }), { status: 400, headers: corsHeaders });
+                }
+
+                // Fetch full Listings
+                const rows = await fetchSheetRange('Listings!A:G');
+                const allListings = parseListings(rows);
+                const grouped = groupByProduct(allListings);
+
+                const stores = [...new Set(allListings.map(l => l.store))].filter(s => s !== "Chemist Warehouse");
+                const breakdown = [];
+                const totals = {};
+                const missingCount = {};
+
+                stores.forEach(s => {
+                    totals[s] = 0;
+                    missingCount[s] = 0;
+                });
+
+                for (const query of productQueries) {
+                    const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+
+                    // Fuzzy Match Scoring System
+                    const matches = grouped.map(p => {
+                        const name = p.name.toLowerCase();
+                        let score = 0;
+
+                        // Every term must be included
+                        if (!terms.every(t => name.includes(t))) return null;
+
+                        // Bonus if name starts with first query term
+                        if (name.startsWith(terms[0])) score += 10;
+
+                        // Bonus for word boundaries (exact word match vs substring)
+                        terms.forEach(t => {
+                            if (new RegExp(`\\b${t}\\b`).test(name)) score += 5;
+                        });
+
+                        // Penalize length (prefer shorter specific matches)
+                        score -= (name.length / 10);
+
+                        return { product: p, score };
+                    })
+                        .filter(m => m !== null)
+                        .sort((a, b) => b.score - a.score);
+
+                    const bestMatch = matches[0]?.product;
+                    const pricesObj = {};
+
+                    if (bestMatch) {
+                        stores.forEach(store => {
+                            const storePrice = bestMatch.prices.find(p => p.store === store);
+                            if (storePrice && storePrice.price > 0 && storePrice.in_stock !== false) {
+                                pricesObj[store] = storePrice.price;
+                                totals[store] += storePrice.price;
+                            } else {
+                                pricesObj[store] = null;
+                                missingCount[store]++;
+                            }
+                        });
+
+                        // Find cheapest store for this item
+                        const validStores = Object.entries(pricesObj).filter(([_, p]) => p !== null);
+                        let cheapestStore = null;
+                        if (validStores.length > 0) {
+                            cheapestStore = validStores.reduce((a, b) => a[1] < b[1] ? a : b)[0];
+                        }
+
+                        breakdown.push({
+                            query,
+                            product: bestMatch.name,
+                            prices: pricesObj,
+                            cheapest: cheapestStore
+                        });
+                    } else {
+                        // Product not found at all
+                        breakdown.push({
+                            query,
+                            product: null,
+                            prices: stores.reduce((acc, s) => ({ ...acc, [s]: null }), {}),
+                            cheapest: null
+                        });
+                        stores.forEach(s => missingCount[s]++);
+                    }
+                }
+
+                // Nullify totals for stores that have any missing items (to match "Not available" requirement)
+                const finalTotals = {};
+                const unavailable = [];
+                let cheapestOverallStore = null;
+                let minTotal = Infinity;
+
+                stores.forEach(s => {
+                    if (missingCount[s] > 0) {
+                        finalTotals[s] = null;
+                        unavailable.push(s);
+                    } else {
+                        finalTotals[s] = parseFloat(totals[s].toFixed(2));
+                        if (finalTotals[s] < minTotal) {
+                            minTotal = finalTotals[s];
+                            cheapestOverallStore = s;
+                        }
+                    }
+                });
+
+                // Calculate savings (Difference between cheapest and next cheapest or average)
+                const validTotals = Object.values(finalTotals).filter(t => t !== null).sort((a, b) => a - b);
+                let savings = 0;
+                if (validTotals.length >= 2) {
+                    savings = parseFloat((validTotals[1] - validTotals[0]).toFixed(2));
+                }
+
+                return new Response(JSON.stringify({
+                    totals: finalTotals,
+                    cheapest_store: cheapestOverallStore,
+                    savings: savings,
+                    breakdown,
+                    unavailable
                 }), { headers: corsHeaders });
 
             } catch (err) {

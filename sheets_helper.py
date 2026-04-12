@@ -87,11 +87,16 @@ def load_existing_listings(worksheet):
                 except ValueError:
                     reg_price = None
 
+            image = ""
+            if len(row) >= COL_IMAGE_URL:
+                image = row[COL_IMAGE_URL - 1].strip()
+
             if name and store:
                 existing[(name, store)] = {
                     'row': i,
                     'price': price,
-                    'reg_price': reg_price
+                    'reg_price': reg_price,
+                    'image': image
                 }
     print(f"  Found {len(existing)} existing listings in sheet.")
     return existing
@@ -130,10 +135,16 @@ def batch_upsert(worksheet, store_name, new_rows, price_updates, history_rows=No
             batch_data.append({'range': cell, 'values': [[price]]})
             
             # Update Regular Price if provided
-            if len(update) > 2:
+            if len(update) > 2 and update[2] is not None:
                 reg_price = update[2]
                 reg_cell = gspread.utils.rowcol_to_a1(row_num, COL_REGULAR_PRICE)
                 batch_data.append({'range': reg_cell, 'values': [[reg_price]]})
+            
+            # Update Image URL if provided
+            if len(update) > 3 and update[3]:
+                img_url = update[3]
+                img_cell = gspread.utils.rowcol_to_a1(row_num, COL_IMAGE_URL)
+                batch_data.append({'range': img_cell, 'values': [[img_url]]})
 
         worksheet.batch_update(batch_data, value_input_option='USER_ENTERED')
         updated = len(price_updates)

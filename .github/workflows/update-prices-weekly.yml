@@ -44,21 +44,11 @@ jobs:
       continue-on-error: true
       id: coles
 
-    - name: Run Chemist Warehouse Pipeline
-      env:
-        GOOGLE_SHEET_ID: 14cci7jorS43qBbAW673-jh_394TPHeCcC4lYAOqIk0k
-      run: python chemist_warehouse_to_sheets_v2.py
-      continue-on-error: true
-      id: chemist
-
-    # ALDI PIPELINE TEMPORARILY REMOVED PENDING APIFY KEY REGISTRATION
-
     - name: Error Handling & Trigger Notifications
-      if: steps.woolies.outcome == 'failure' || steps.coles.outcome == 'failure' || steps.chemist.outcome == 'failure'
+      if: steps.woolies.outcome == 'failure' || steps.coles.outcome == 'failure'
       run: |
         echo "🚨 CRITICAL ERROR: One or more pipelines failed during the sync process!"
         echo "- Woolworths: ${{ steps.woolies.outcome }}"
         echo "- Coles: ${{ steps.coles.outcome }}"
-        echo "- Chemist Warehouse: ${{ steps.chemist.outcome }}"
         echo "Failing the Github workflow deliberately to trigger the native email notification to the repository owner!"
         exit 1

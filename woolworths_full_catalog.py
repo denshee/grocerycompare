@@ -150,9 +150,13 @@ def batch_write(worksheet, products_buffer: list[dict], existing: dict, written_
             price_changed = (p["price"] is not None and p["price"] != old_data['price'])
             reg_price_changed = (p["was_price"] is not None and p["was_price"] != old_data['reg_price'])
             
-            if price_changed or reg_price_changed:
-                price_updates.append((old_data['row'], p["price"], p["was_price"]))
-                history_rows.append([now_str, name, STORE_NAME, p["price"], p["was_price"] or ""])
+            image_empty = not old_data.get('image')
+            
+            if price_changed or reg_price_changed or image_empty:
+                # Tuple format: (row, price, reg_price, image_url)
+                price_updates.append((old_data['row'], p["price"], p["was_price"], p["image"] if image_empty else None))
+                if price_changed or reg_price_changed:
+                    history_rows.append([now_str, name, STORE_NAME, p["price"], p["was_price"] or ""])
         else:
             new_rows.append([
                 "", name, STORE_NAME,
