@@ -5,7 +5,7 @@ from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
 
-SHEET_ID = os.getenv('GOOGLE_SHEET_ID', '14cci7jorS43qBbAW673-jh_394TPHeCcC4lYAOqIk0k')
+SHEET_ID = os.getenv('GOOGLE_SHEET_ID') or '14cci7jorS43qBbAW673-jh_394TPHeCcC4lYAOqIk0k'
 
 SCOPES = [
     'https://spreadsheets.google.com/feeds',
