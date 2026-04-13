@@ -91,7 +91,7 @@ def main():
     total_scraped = 0
 
     from playwright.sync_api import sync_playwright
-    from playwright_stealth import stealth
+    from playwright_stealth import Stealth
     print(f"\n[Phase 2] Booting Playwright with Stealth...")
     
     with sync_playwright() as p:
@@ -101,7 +101,7 @@ def main():
             viewport={"width": 1280, "height": 1024}
         )
         page = context.new_page()
-        stealth(page)
+        Stealth().use_sync(page)
 
         for slug in COLES_CATEGORIES:
             print(f"\n  Category: {slug}")
