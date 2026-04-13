@@ -94,11 +94,22 @@ def batch_write(worksheet, products_buffer: list[dict],
 
 def main():
     parser = argparse.ArgumentParser(description="Aldi full catalogue scraper")
+    parser.add_argument("--category", type=str, help="Specific category slug to scrape")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
+    target_categories = ALDI_CATEGORIES
+    if args.category:
+        # Match slug in URL
+        matched = [c for c in ALDI_CATEGORIES if args.category in c]
+        if matched:
+            target_categories = matched
+        else:
+            print(f"Error: Category '{args.category}' not found.")
+            import sys; sys.exit(1)
+
     print("=" * 60)
-    print("Aldi Full Catalogue → Google Sheets (+ History)")
+    print(f"Aldi Scrape {'(All)' if not args.category else args.category} → Google Sheets")
     print("=" * 60)
 
     print("\n[Phase 1] Connecting to Sheets...")

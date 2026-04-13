@@ -75,12 +75,21 @@ def batch_write(worksheet, products_buffer: list[dict], existing: dict, written_
 
 def main():
     parser = argparse.ArgumentParser(description="Woolworths full catalogue scraper")
+    parser.add_argument("--category", type=str, help="Specific category slug to scrape")
     parser.add_argument("--max-pages", type=int, default=None)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
+    target_categories = WOOLWORTHS_CATEGORIES
+    if args.category:
+        if args.category in WOOLWORTHS_CATEGORIES:
+            target_categories = [args.category]
+        else:
+            print(f"Error: Category '{args.category}' not found in supported list.")
+            sys.exit(1)
+
     print("=" * 60)
-    print("Woolworths Full Catalogue → Google Sheets (DOM Extraction)")
+    print(f"Woolworths Scrape {'(All)' if not args.category else args.category} → Google Sheets")
     print("=" * 60)
 
     print("\n[Phase 1] Connecting to Google Sheets...")
@@ -103,17 +112,15 @@ def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
         
-        for idx, slug in enumerate(WOOLWORTHS_CATEGORIES):
-            # Session Rotation: New context every 2 categories
-            if idx % 2 == 0:
-                print(f"\n[Session Rotation] Creating new context...")
-                context = browser.new_context(
-                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-                    viewport={"width": 1280, "height": 1024}
-                )
-                page = context.new_page()
-                Stealth().use_sync(page)
-                time.sleep(2)
+        for idx, slug in enumerate(target_categories):
+            # Session Rotation/Creation
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                viewport={"width": 1280, "height": 1024}
+            )
+            page = context.new_page()
+            Stealth().use_sync(page)
+            time.sleep(2)
 
             print(f"\n  Category: {slug}")
             page_num = 1

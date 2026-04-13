@@ -72,12 +72,21 @@ def batch_write(worksheet, products_buffer: list[dict],
 
 def main():
     parser = argparse.ArgumentParser(description="Coles full catalogue scraper")
+    parser.add_argument("--category", type=str, help="Specific category slug to scrape")
     parser.add_argument("--max-pages", type=int, default=None)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
+    target_categories = COLES_CATEGORIES
+    if args.category:
+        if args.category in COLES_CATEGORIES:
+            target_categories = [args.category]
+        else:
+            print(f"Error: Category '{args.category}' not found.")
+            import sys; sys.exit(1)
+
     print("=" * 60)
-    print("Coles Full Catalogue → Google Sheets (+ History)")
+    print(f"Coles Scrape {'(All)' if not args.category else args.category} → Google Sheets")
     print("=" * 60)
     
     print("\n[Phase 1] Connecting to Google Sheets...")
@@ -99,26 +108,16 @@ def main():
     
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            viewport={"width": 1280, "height": 1024}
-        )
-        page = context.new_page()
-        Stealth().use_sync(page)
-
-        for idx, slug in enumerate(COLES_CATEGORIES):
-            # Aggressive Session Rotation: Refresh every 2 categories
-            if idx > 0 and idx % 2 == 0:
-                print(f"\n[Rotation] Refreshing browser session (Aggressive)...")
-                page.close()
-                context.close()
-                context = browser.new_context(
-                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-                    viewport={"width": 1280, "height": 1024}
-                )
-                page = context.new_page()
-                Stealth().use_sync(page)
-                time.sleep(random.uniform(8, 15)) # Deep jitter
+        
+        for idx, slug in enumerate(target_categories):
+            # Session Rotation
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                viewport={"width": 1280, "height": 1024}
+            )
+            page = context.new_page()
+            Stealth().use_sync(page)
+            time.sleep(random.uniform(5, 10))
 
             print(f"\n  Category: {slug}")
             page_num = 1
