@@ -3,6 +3,7 @@ python-dotenv
 pyairtable
 apify-client
 playwright
+playwright-stealth
 beautifulsoup4
 lxml
 flask

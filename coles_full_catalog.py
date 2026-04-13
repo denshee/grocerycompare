@@ -91,16 +91,17 @@ def main():
     total_scraped = 0
 
     from playwright.sync_api import sync_playwright
-    print(f"\n[Phase 2] Booting Playwright...")
+    from playwright_stealth import stealth_sync
+    print(f"\n[Phase 2] Booting Playwright with Stealth...")
     
     with sync_playwright() as p:
-        # Use firefox for better stealth if chromium fails, but we'll try chromium first with a larger wait
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             viewport={"width": 1280, "height": 1024}
         )
         page = context.new_page()
+        stealth_sync(page)
 
         for slug in COLES_CATEGORIES:
             print(f"\n  Category: {slug}")
