@@ -35,7 +35,7 @@ def get_session_cookies(headless: bool = True) -> dict:
     """Launch a real Chromium browser to earn valid Akamai session cookies."""
     from playwright.sync_api import sync_playwright
     from playwright_stealth import Stealth
-    print("\n[Phase 1] Bootstrapping browser session (Stealth)...")
+    print("\n[Phase 1] Bootstrapping browser session (Stealth-Enabled)...")
     cookies = {}
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless, args=["--no-sandbox", "--disable-dev-shm-usage"])
@@ -46,18 +46,28 @@ def get_session_cookies(headless: bool = True) -> dict:
         )
         page = context.new_page()
         Stealth().use_sync(page)
-        page.goto(WW_BASE + "/", wait_until="domcontentloaded", timeout=60_000)
-        page.wait_for_timeout(5_000)
-        for c in context.cookies():
-            cookies[c["name"]] = c["value"]
+        
         try:
-            page.goto(WW_BASE + "/shop/browse/dairy-eggs-fridge?pageNumber=1", wait_until="domcontentloaded", timeout=20_000)
-            page.wait_for_timeout(2_000)
+            print(f"  → Visiting {WW_BASE}...")
+            page.goto(WW_BASE + "/", wait_until="networkidle", timeout=60_000)
+            page.wait_for_timeout(5_000)
+            
+            # Specifically browse a category to force deeper cookies (e.g. bm_sz, _abck)
+            print(f"  → Visiting Dairy category for session hardening...")
+            page.goto(WW_BASE + "/shop/browse/dairy-eggs-fridge", wait_until="networkidle", timeout=60_000)
+            page.wait_for_timeout(3_000)
+            
             for c in context.cookies():
                 cookies[c["name"]] = c["value"]
-        except Exception:
-            pass
+            
+            print(f"  → Captured {len(cookies)} cookies.")
+        except Exception as e:
+            print(f"  [ERROR] Session bootstrap failed: {e}")
+        
         browser.close()
+    
+    if not cookies:
+        print("  [WARNING] No cookies captured. Woolworths API requests will likely fail.")
     return cookies
 
 
@@ -77,9 +87,13 @@ def get_categories(session: requests.Session) -> list[str]:
                     curl = child.get("NodeUrl") or child.get("UrlFriendlyName") or ""
                     curl = curl.strip("/").split("/")[-1]
                     if curl: cats.append(curl)
-            if cats: return list(dict.fromkeys(cats))
-    except Exception:
-        pass
+            if cats:
+                cats = list(dict.fromkeys(cats))
+                print(f"  → Discovered {len(cats)} categories via API.")
+                return cats
+    except Exception as e:
+        print(f"  → Category API failed: {e}")
+    print("  → Falling back to hardcoded categories.")
     return WOOLWORTHS_CATEGORIES
 
 

@@ -121,36 +121,55 @@ def main():
         )
         page = context.new_page()
 
-        for url in ALDI_CATEGORIES:
-            category_name = url.split('/')[-3]
+        for base_url in ALDI_CATEGORIES:
+            category_name = base_url.split('/')[-3]
             print(f"  Category: {category_name}")
-            try:
-                page.goto(url, wait_until="domcontentloaded", timeout=30_000)
-                page.wait_for_timeout(2000)
-                tiles = page.locator("div.product-tile").all()
-                products_on_page = 0
-                for tile in tiles:
-                    try:
-                        name_el = tile.locator(".product-tile__name p").first
-                        price_el = tile.locator(".base-price__regular span").first
-                        if not name_el.is_visible() or not price_el.is_visible(): continue
+            page_num = 1
+            while True:
+                url = base_url + f"?page={page_num}"
+                try:
+                    page.goto(url, wait_until="domcontentloaded", timeout=45_000)
+                    page.wait_for_timeout(2000)
+                    
+                    tiles = page.locator("div.product-tile").all()
+                    if not tiles:
+                        print(f"    → No more products found at page {page_num}")
+                        break
                         
-                        name = name_el.inner_text().strip()
-                        brand = ""
-                        if tile.locator(".product-tile__brandname p").is_visible():
-                            brand = tile.locator(".product-tile__brandname p").first.inner_text().strip()
-                        if brand: name = f"{brand} {name}"
-                        
-                        price = clean_price(price_el.inner_text().strip())
-                        img_url = tile.locator(".product-tile__picture img").first.get_attribute("src") or ""
-                        if img_url.startswith("//"): img_url = "https:" + img_url
+                    products_on_page = 0
+                    for tile in tiles:
+                        try:
+                            name_el = tile.locator(".product-tile__name p").first
+                            price_el = tile.locator(".base-price__regular span").first
+                            # Handle cases where price might be hidden or different
+                            if not name_el.is_visible(): continue
+                            
+                            name = name_el.inner_text().strip()
+                            brand = ""
+                            if tile.locator(".product-tile__brandname p").is_visible():
+                                brand = tile.locator(".product-tile__brandname p").first.inner_text().strip()
+                            if brand: name = f"{brand} {name}"
+                            
+                            price_text = price_el.inner_text().strip() if price_el.is_visible() else ""
+                            price = clean_price(price_text)
+                            
+                            img_url = tile.locator(".product-tile__picture img").first.get_attribute("src") or ""
+                            if img_url.startswith("//"): img_url = "https:" + img_url
 
-                        if name and price:
-                            buffer.append({"name": name, "price": price, "was_price": None, "in_stock": True, "image": img_url})
-                            products_on_page += 1
-                    except: pass
-                print(f"    → Found {products_on_page} items")
-            except: continue
+                            if name and price:
+                                buffer.append({"name": name, "price": price, "was_price": None, "in_stock": "TRUE", "image": img_url})
+                                products_on_page += 1
+                        except: pass
+                    
+                    print(f"    Page {page_num}: +{products_on_page} items")
+                    if products_on_page < 10: # Likely the end of results
+                        break
+                    
+                    page_num += 1
+                    page.wait_for_timeout(random.uniform(1000, 3000)) # Ethical delay
+                except Exception as e:
+                    print(f"    Error on page {page_num}: {e}")
+                    break
 
             if not args.dry_run and len(buffer) >= BATCH_WRITE_EVERY:
                 print(f"  ══ Flushing {len(buffer)} items... ══")

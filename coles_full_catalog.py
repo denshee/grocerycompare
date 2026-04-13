@@ -103,7 +103,20 @@ def main():
         page = context.new_page()
         Stealth().use_sync(page)
 
-        for slug in COLES_CATEGORIES:
+        for idx, slug in enumerate(COLES_CATEGORIES):
+            # Session Rotation: Refresh browser every 3 categories to avoid detection
+            if idx > 0 and idx % 3 == 0:
+                print(f"\n[Rotation] Refreshing browser session...")
+                page.close()
+                context.close()
+                context = browser.new_context(
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                    viewport={"width": 1280, "height": 1024}
+                )
+                page = context.new_page()
+                Stealth().use_sync(page)
+                time.sleep(random.uniform(5, 10))
+
             print(f"\n  Category: {slug}")
             page_num = 1
             while True:
@@ -111,9 +124,14 @@ def main():
                 url = f"https://www.coles.com.au/browse/{slug}?page={page_num}"
                 
                 try:
+                    # Random jitter before request
+                    time.sleep(random.uniform(3, 7))
                     page.goto(url, wait_until="domcontentloaded", timeout=60000)
-                    # Coles needs a moment to inject __NEXT_DATA__
-                    page.wait_for_timeout(5000)
+                    # Simulated user scrolling to trigger state
+                    page.evaluate("window.scrollTo(0, 500)")
+                    page.wait_for_timeout(2000)
+                    page.evaluate("window.scrollTo(0, 0)")
+                    page.wait_for_timeout(3000)
                 except: pass
 
                 # Extract __NEXT_DATA__
