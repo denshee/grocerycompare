@@ -29,7 +29,7 @@ jobs:
       run: echo '${{ secrets.GCP_CREDENTIALS }}' > credentials.json
     - name: Run Woolworths Scraper
       env:
-        GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+        GOOGLE_SHEET_ID: 14cci7jorS43qBbAW673-jh_394TPHeCcC4lYAOqIk0k
       run: python woolworths_full_catalog.py --category ${{ matrix.category }}
 
   # ── COLES SHARDED JOBS ────────────────────────────────────────────────────
@@ -54,7 +54,7 @@ jobs:
       run: echo '${{ secrets.GCP_CREDENTIALS }}' > credentials.json
     - name: Run Coles Scraper
       env:
-        GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+        GOOGLE_SHEET_ID: 14cci7jorS43qBbAW673-jh_394TPHeCcC4lYAOqIk0k
       run: python coles_full_catalog.py --category ${{ matrix.category }}
 
   # ── ALDI SHARDED JOBS ─────────────────────────────────────────────────────
