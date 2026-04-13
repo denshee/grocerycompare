@@ -1,3 +1,6 @@
+import time
+import random
+
 """
 aldi_full_catalog.py
 --------------------
