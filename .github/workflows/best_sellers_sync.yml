@@ -1,0 +1,42 @@
+name: Best Sellers Priority Sync
+
+on:
+  schedule:
+    # 11:00 AM AWST (Perth Time) is 3:00 AM UTC. Runs every Monday.
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+jobs:
+  best-sellers-sync:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Python 3.10+
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        playwright install chromium
+        
+    - name: Create credentials.json
+      run: |
+        echo '${{ secrets.GCP_CREDENTIALS }}' > credentials.json
+        
+    - name: Run Best Sellers Scraper
+      env:
+        GOOGLE_SHEET_ID: 14cci7jorS43qBbAW673-jh_394TPHeCcC4lYAOqIk0k
+      run: python scrape_bestsellers.py
+      
+    - name: Error Handling & Trigger Notifications
+      if: failure()
+      run: |
+        echo "🚨 ERROR: The Best Sellers Priority Sync failed!"
+        exit 1
