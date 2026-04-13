@@ -107,9 +107,9 @@ def main():
         Stealth().use_sync(page)
 
         for idx, slug in enumerate(COLES_CATEGORIES):
-            # Session Rotation: Refresh browser every 3 categories to avoid detection
-            if idx > 0 and idx % 3 == 0:
-                print(f"\n[Rotation] Refreshing browser session...")
+            # Aggressive Session Rotation: Refresh every 2 categories
+            if idx > 0 and idx % 2 == 0:
+                print(f"\n[Rotation] Refreshing browser session (Aggressive)...")
                 page.close()
                 context.close()
                 context = browser.new_context(
@@ -118,7 +118,7 @@ def main():
                 )
                 page = context.new_page()
                 Stealth().use_sync(page)
-                time.sleep(random.uniform(5, 10))
+                time.sleep(random.uniform(8, 15)) # Deep jitter
 
             print(f"\n  Category: {slug}")
             page_num = 1
@@ -128,13 +128,16 @@ def main():
                 
                 try:
                     # Random jitter before request
-                    time.sleep(random.uniform(3, 7))
+                    time.sleep(random.uniform(5, 12))
                     page.goto(url, wait_until="domcontentloaded", timeout=60000)
-                    # Simulated user scrolling to trigger state
-                    page.evaluate("window.scrollTo(0, 500)")
-                    page.wait_for_timeout(2000)
+                    
+                    # More natural human behavior
+                    page.evaluate("window.scrollTo(0, 300)")
+                    page.wait_for_timeout(random.randint(1000, 3000))
+                    page.evaluate("window.scrollTo(0, 600)")
+                    page.wait_for_timeout(random.randint(2000, 4000))
                     page.evaluate("window.scrollTo(0, 0)")
-                    page.wait_for_timeout(3000)
+                    page.wait_for_timeout(2000)
                 except: pass
 
                 # Extract __NEXT_DATA__
