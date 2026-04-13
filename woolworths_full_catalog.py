@@ -34,7 +34,7 @@ WOOLWORTHS_CATEGORIES = [
 def get_session_cookies(headless: bool = True) -> dict:
     """Launch a real Chromium browser to earn valid Akamai session cookies."""
     from playwright.sync_api import sync_playwright
-    from playwright_stealth import stealth_sync
+    from playwright_stealth import stealth
     print("\n[Phase 1] Bootstrapping browser session (Stealth)...")
     cookies = {}
     with sync_playwright() as p:
@@ -45,7 +45,7 @@ def get_session_cookies(headless: bool = True) -> dict:
             locale="en-AU",
         )
         page = context.new_page()
-        stealth_sync(page)
+        stealth(page)
         page.goto(WW_BASE + "/", wait_until="domcontentloaded", timeout=60_000)
         page.wait_for_timeout(5_000)
         for c in context.cookies():
