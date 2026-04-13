@@ -131,6 +131,7 @@ def main():
             while True:
                 url = base_url + f"?page={page_num}"
                 try:
+                    print(f"      Visiting page {page_num}: {url}")
                     page.goto(url, wait_until="domcontentloaded", timeout=45_000)
                     page.wait_for_timeout(2000)
                     

@@ -122,15 +122,28 @@ def main():
                 
                 url = f"{WW_BASE}/shop/browse/{slug}?pageNumber={page_num}"
                 try:
-                    time.sleep(random.uniform(2, 5)) # Jitter
-                    page.goto(url, wait_until="domcontentloaded", timeout=60_000)
-                    page.wait_for_timeout(3000)
+                    time.sleep(random.uniform(3, 7)) # Jitter
+                    print(f"      Loading page {page_num}...")
+                    page.goto(url, wait_until="networkidle", timeout=90_000)
                     
-                    # Scroll to trigger lazy loading of tiles
-                    page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
-                    page.wait_for_timeout(1000)
-                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                    page.wait_for_timeout(2000)
+                    # Wait for at least one product tile to appear
+                    try:
+                        page.wait_for_selector("wc-product-tile, wow-product-tile", timeout=30_000)
+                    except:
+                        print(f"      [Timeout] No product tiles appeared on page {page_num}.")
+                        # Check for 'No results' text
+                        if "no results" in page.content().lower():
+                            print("      [End] No results found. Category complete.")
+                            break
+                        # Maybe we are blocked
+                        if "access denied" in page.content().lower() or "blocked" in page.content().lower():
+                            print("      [BLOCKED] Akamai block detected.")
+                            break
+                    
+                    # Human-like scrolling
+                    for _ in range(3):
+                        page.mouse.wheel(0, 1000)
+                        page.wait_for_timeout(random.randint(1000, 2000))
 
                     tiles = page.locator("wc-product-tile, wow-product-tile").all()
                     if not tiles:

@@ -150,7 +150,12 @@ def main():
                     
                     if not raw_json:
                         print(f"      No __NEXT_DATA__ found on {url}")
-                        break
+                        # Check if we are blocked
+                        if "access denied" in page.content().lower() or "blocked" in page.content().lower() or "challenge" in page.content().lower():
+                            print(f"      [BLOCKED] Coles anti-bot detected on page {page_num}. Terminating category.")
+                            break
+                        page_num += 1
+                        continue
 
                     data = json.loads(raw_json)
                     results = data.get("props", {}).get("pageProps", {}).get("searchResults", {}).get("results", [])
