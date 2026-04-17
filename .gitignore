@@ -19,3 +19,9 @@ match.py
 *dates.txt
 *out*.txt
 
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
