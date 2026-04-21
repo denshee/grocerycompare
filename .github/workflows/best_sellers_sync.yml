@@ -1,8 +1,6 @@
 name: Best Sellers Priority Sync
 
 on:
-  push:
-    branches: [ main ]
   schedule:
     # 11:00 AM AWST (Perth Time) is 3:00 AM UTC. Runs every Monday.
     - cron: '0 3 * * 1'
