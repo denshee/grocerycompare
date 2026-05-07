@@ -2,14 +2,12 @@ name: Weekly Grocery Price Sync
 
 on:
   schedule:
-    # 11:00 PM AWST (Perth Time) is 3:00 PM UTC. Runs Every Wednesday.
     - cron: '0 15 * * 3'
   workflow_dispatch:
 
 jobs:
   update-prices:
     runs-on: ubuntu-latest
-    
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
@@ -32,8 +30,7 @@ jobs:
         python -m playwright install chromium
 
     - name: Create credentials.json
-      run: |
-        echo '${{ secrets.GCP_CREDENTIALS }}' > credentials.json
+      run: echo '${{ secrets.GCP_CREDENTIALS }}' > credentials.json
         
     - name: Run Woolworths Pipeline
       env:
