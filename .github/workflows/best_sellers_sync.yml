@@ -18,17 +18,16 @@ jobs:
         python-version: '3.10'
         cache: 'pip'
 
-    - name: Install System Dependencies (For curl_cffi)
+    - name: Install System Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libcurl4
+        sudo apt-get install -y libcurl4 libasound2t64
 
     - name: Install Python Dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install playwright
-        python -m playwright install --with-deps chromium
+        python -m playwright install chromium
         
     - name: Create credentials.json
       run: echo '${{ secrets.GCP_CREDENTIALS }}' > credentials.json
@@ -36,4 +35,5 @@ jobs:
     - name: Run Scraper
       env:
         GOOGLE_SHEET_ID: 14cci7jorS43qBbAW673-jh_394TPHeCcC4lYAOqIk0k
+        GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
       run: python coles_to_sheets.py

@@ -21,13 +21,13 @@ jobs:
     - name: Install System Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libcurl4
+        sudo apt-get install -y libcurl4 libasound2t64
 
     - name: Install Python Dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        python -m playwright install --with-deps chromium
+        python -m playwright install chromium
 
     - name: Create credentials.json
       run: echo '${{ secrets.GCP_CREDENTIALS }}' > credentials.json
@@ -35,9 +35,11 @@ jobs:
     - name: Run Woolworths Pipeline
       env:
         GOOGLE_SHEET_ID: 14cci7jorS43qBbAW673-jh_394TPHeCcC4lYAOqIk0k
+        GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
       run: python woolworths_to_sheets.py
 
     - name: Run Coles Pipeline
       env:
         GOOGLE_SHEET_ID: 14cci7jorS43qBbAW673-jh_394TPHeCcC4lYAOqIk0k
+        GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
       run: python coles_to_sheets.py

@@ -131,9 +131,41 @@ def batch_upsert(worksheet, store_name, new_rows, price_updates, history_rows=No
         print(f"  Appending {len(new_rows)} new {store_name} rows...")
         worksheet.append_rows(new_rows, value_input_option='USER_ENTERED')
         created = len(new_rows)
-        time.sleep(1)
+        time.sleep(2) # Adaptive Rate Limiting
 
-    # 2. Update existing prices in Listings
+    # 2. Update existing prices in Listings (Optimized Row-Level Range Updates)
+    if price_updates:
+        print(f"  Updating {len(price_updates)} existing {store_name} rows (Range-based)...")
+        batch_data = []
+        for update in price_updates:
+            # Expecting update format: (row_num, [category, store, price, reg_price, in_stock, image, canonical_id])
+            if len(update) >= 2 and isinstance(update[1], list):
+                row_num = update[0]
+                values = update[1]
+                # Range from Category (C) to Canonical ID (I)
+                range_a1 = f"C{row_num}:I{row_num}"
+                batch_data.append({
+                    'range': range_a1,
+                    'values': [values]
+                })
+            else:
+                # Legacy fallback
+                row_num = update[0]
+                price = update[1]
+                batch_data.append({
+                    'range': gspread.utils.rowcol_to_a1(row_num, COL_CURRENT_PRICE),
+                    'values': [[price]]
+                })
+                if len(update) > 2 and update[2] is not None:
+                    batch_data.append({
+                        'range': gspread.utils.rowcol_to_a1(row_num, COL_REGULAR_PRICE),
+                        'values': [[update[2]]]
+                    })
+
+        if batch_data:
+            worksheet.batch_update(batch_data, value_input_option='USER_ENTERED')
+            updated = len(price_updates)
+            time.sleep(2)
     if price_updates:
         print(f"  Updating {len(price_updates)} existing {store_name} prices...")
         batch_data = []
