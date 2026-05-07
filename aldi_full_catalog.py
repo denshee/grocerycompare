@@ -1,12 +1,9 @@
 import time
-import random
-import re
 from datetime import datetime
 import sheets_helper
 from playwright.sync_api import sync_playwright
 from playwright_stealth import Stealth
 
-STORE_NAME = "Aldi"
 ALDI_CATEGORIES = [
     "https://www.aldi.com.au/en/groceries/super-savers/",
     "https://www.aldi.com.au/en/groceries/fresh-produce/",
@@ -20,82 +17,51 @@ ALDI_CATEGORIES = [
     "https://www.aldi.com.au/en/groceries/beauty-personal-care/"
 ]
 
-def clean_price(text):
-    if not text: return None
-    if 'c' in text.lower():
-        digits = re.sub(r'[^\d]', '', text)
-        return float(digits) / 100.0 if digits else None
-    cleaned = re.sub(r'[^\d.]', '', text)
-    try: return float(cleaned) if cleaned else None
-    except: return None
-
 def main():
     worksheet = sheets_helper.get_listings_worksheet()
     existing = sheets_helper.load_existing_listings(worksheet)
-    
+
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
-        context = browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-        page = context.new_page()
+        # We launch with a specific viewport to force the desktop site
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(viewport={'width': 1920, 'height': 1080})
         Stealth().use_sync(page)
 
         for url in ALDI_CATEGORIES:
             cat_name = url.split('/')[-2].replace('-', ' ').title()
-            print(f"  Scraping Aldi {cat_name}...")
+            print(f"  Attempting Aldi: {cat_name}")
             
-            success = False
-            for attempt in range(3):
-                try:
-                    page.goto(url, wait_until="commit", timeout=120000)
-                    page.wait_for_selector("div.product-tile", timeout=60000)
-                    
-                    # Human-like scroll to trigger lazy loading
-                    page.evaluate("window.scrollTo(0, document.body.scrollHeight/2)")
-                    time.sleep(2)
-                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                    time.sleep(3)
-                    
-                    tiles = page.locator("div.product-tile").all()
-                    buffer = []
-                    for tile in tiles:
-                        try:
-                            name = tile.locator(".product-tile__name").first.inner_text().strip()
-                            price_el = tile.locator(".base-price__regular").first
-                            price = clean_price(price_el.inner_text().strip())
-                            
-                            img_url = ""
-                            img_el = tile.locator("img").first
-                            if img_el.count() > 0:
-                                img_url = img_el.get_attribute("src")
-                                if img_url and img_url.startswith("//"): img_url = "https:" + img_url
-
-                            if name and price:
-                                buffer.append({"name": name, "category": cat_name, "price": price, "image": img_url})
-                        except: continue
-                    
-                    if buffer:
-                        new_rows, updates = [], []
-                        for item in buffer:
-                            key = (item["name"], STORE_NAME)
-                            if key in existing:
-                                old = existing[key]
-                                updates.append((old['row'], [item["category"], STORE_NAME, item["price"], None, "TRUE", item["image"], ""]))
-                            else:
-                                new_rows.append(["", item["name"], item["category"], STORE_NAME, item["price"], "", "TRUE", item["image"]])
-                        
-                        sheets_helper.batch_upsert(worksheet, STORE_NAME, new_rows, updates)
-                        print(f"    SUCCESS: Uploaded {len(buffer)} items for {cat_name}")
-                        success = True
-                        break 
+            # CRITICAL CHANGE: We only wait for 'commit', then manually wait for the tile
+            page.goto(url, wait_until="commit", timeout=60000)
+            try:
+                page.wait_for_selector("div.product-tile", timeout=30000)
                 
-                except Exception as e:
-                    print(f"    Attempt {attempt + 1} failed for {cat_name}. Retrying...")
-                    time.sleep(5)
-
-            if not success:
-                # GRACEFUL SKIP: We log it, but don't kill the whole job.
-                print(f"  [ALDI ERROR] Could not load {cat_name} after 3 tries. Skipping this aisle...")
-
+                # Scroll to bottom to load all lazy-loaded prices
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                time.sleep(3)
+                
+                tiles = page.locator("div.product-tile").all()
+                new_rows, updates = [], []
+                
+                for tile in tiles:
+                    name = tile.locator(".product-tile__name").first.inner_text().strip()
+                    price_text = tile.locator(".base-price__regular").first.inner_text().strip()
+                    # Clean price (e.g., '$4.99' -> 4.99)
+                    price = float(''.join(c for c in price_text if c.isdigit() or c == '.'))
+                    
+                    key = (name, "Aldi")
+                    if key in existing:
+                        old = existing[key]
+                        updates.append((old['row'], [cat_name, "Aldi", price, None, "TRUE", "", ""]))
+                    else:
+                        new_rows.append(["", name, cat_name, "Aldi", price, "", "TRUE", ""])
+                
+                sheets_helper.batch_upsert(worksheet, "Aldi", new_rows, updates)
+                print(f"    Successfully scraped {cat_name}")
+                
+            except Exception as e:
+                print(f"    Failed to find products in {cat_name}. Website may have changed layout.")
+        
         browser.close()
 
 if __name__ == "__main__":
