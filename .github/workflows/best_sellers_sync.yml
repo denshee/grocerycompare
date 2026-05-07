@@ -2,7 +2,6 @@ name: Best Sellers Priority Sync
 
 on:
   schedule:
-    # 11:00 AM AWST (Perth Time) is 3:00 PM UTC. Runs Every Monday.
     - cron: '0 15 * * 1'
   workflow_dispatch:
 
@@ -49,5 +48,4 @@ jobs:
       env:
         GOOGLE_SHEET_ID: 14cci7jorS43qBbAW673-jh_394TPHeCcC4lYAOqIk0k
         GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
-      # We use a limited page count for Aldi to keep it fast for 'Best Sellers'
-      run: python aldi_full_catalog.py --max-pages 2
+      run: python aldi_full_catalog.py

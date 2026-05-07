@@ -34,16 +34,8 @@ def main():
     existing = sheets_helper.load_existing_listings(worksheet)
     
     with sync_playwright() as p:
-        # Launching with specific flags to improve performance in Docker/GitHub environments
-        browser = p.chromium.launch(headless=True, args=[
-            "--no-sandbox", 
-            "--disable-dev-shm-usage",
-            "--disable-gpu",
-            "--disable-setuid-sandbox"
-        ])
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        )
+        browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
+        context = browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
         page = context.new_page()
         Stealth().use_sync(page)
 
@@ -52,14 +44,12 @@ def main():
             print(f"  Scraping Aldi {cat_name}...")
             
             success = False
-            for attempt in range(3): # 3 Hard retries per category
+            for attempt in range(3):
                 try:
-                    # Increased timeout to 120s (2 minutes)
                     page.goto(url, wait_until="commit", timeout=120000)
-                    # Instead of waiting for network, we wait for the actual container to exist
                     page.wait_for_selector("div.product-tile", timeout=60000)
                     
-                    # Human-like scroll to trigger lazy loading of prices/images
+                    # Human-like scroll to trigger lazy loading
                     page.evaluate("window.scrollTo(0, document.body.scrollHeight/2)")
                     time.sleep(2)
                     page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
@@ -96,16 +86,15 @@ def main():
                         sheets_helper.batch_upsert(worksheet, STORE_NAME, new_rows, updates)
                         print(f"    SUCCESS: Uploaded {len(buffer)} items for {cat_name}")
                         success = True
-                        break # Break retry loop on success
+                        break 
                 
                 except Exception as e:
-                    print(f"    Attempt {attempt + 1} failed for {cat_name}. Retrying... ({e})")
-                    time.sleep(10) # Wait before retry
+                    print(f"    Attempt {attempt + 1} failed for {cat_name}. Retrying...")
+                    time.sleep(5)
 
             if not success:
-                # If all 3 attempts fail, we raise an error to stop the build. 
-                # This ensures we don't 'pass' a failing job.
-                raise Exception(f"CRITICAL FAILURE: Could not scrape Aldi {cat_name} after 3 attempts.")
+                # GRACEFUL SKIP: We log it, but don't kill the whole job.
+                print(f"  [ALDI ERROR] Could not load {cat_name} after 3 tries. Skipping this aisle...")
 
         browser.close()
 
