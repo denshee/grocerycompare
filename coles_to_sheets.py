@@ -19,17 +19,15 @@ def human_delay(min_sec=2, max_sec=5):
 
 def simulate_human_behavior(page):
     """Simulates erratic mouse movement and scrolling."""
-    # Randomly scroll down and up
     scroll_amount = random.randint(300, 800)
     page.mouse.wheel(0, scroll_amount)
     human_delay(1, 3)
     page.mouse.wheel(0, -random.randint(100, scroll_amount))
     
-    # Random erratic mouse movements across the screen
     for _ in range(3):
         x = random.randint(100, 1000)
         y = random.randint(100, 800)
-        page.mouse.move(x, y, steps=10) # 'steps' makes the movement fluid, not instant
+        page.mouse.move(x, y, steps=10)
         time.sleep(random.uniform(0.1, 0.5))
 
 def main():
@@ -38,8 +36,8 @@ def main():
     all_new_rows, all_updates = [], []
 
     with sync_playwright() as p:
-        # slow_mo adds a base delay to every single Playwright action
-        browser = p.chromium.launch(headless=False, slow_mo=random.randint(200, 600)) 
+        # CRITICAL FIX: GitHub Actions requires headless=True
+        browser = p.chromium.launch(headless=True, slow_mo=random.randint(200, 600)) 
         
         context = browser.new_context(
             viewport={'width': 1366, 'height': 768},
@@ -50,7 +48,6 @@ def main():
         page = context.new_page()
         Stealth().use_sync(page)
 
-        # Go to the homepage first, like a real user
         print("  [HUMAN MODE] Navigating to homepage...")
         page.goto("https://www.coles.com.au/", timeout=60000)
         simulate_human_behavior(page)
@@ -58,7 +55,6 @@ def main():
         for term in SEARCH_TERMS:
             print(f"  [HUMAN MODE] Searching: {term}")
             try:
-                # Instead of going straight to the URL, we navigate there naturally
                 url = f"https://www.coles.com.au/search?q={term}"
                 page.goto(url, wait_until="domcontentloaded", timeout=60000)
                 
@@ -84,7 +80,7 @@ def main():
                     except: continue
                 
                 print(f"    Extracted {term}. Taking a breather...")
-                human_delay(8, 15) # Long pause between searches
+                human_delay(8, 15)
                 
             except Exception as e:
                 print(f"    ⚠️ Failed on {term}. Taking a longer break to avoid suspicion.")
