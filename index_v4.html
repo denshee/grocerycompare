@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>PricePrecision | Analytical Cockpit</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#006c49",
+                        "primary-container": "#10b981",
+                        "on-primary-container": "#00422b",
+                        "on-primary": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-low": "#f2f4f6",
+                        "surface-container-high": "#e6e8ea",
+                        "background": "#f7f9fb",
+                        "on-background": "#191c1e",
+                        "on-surface": "#191c1e",
+                        "on-surface-variant": "#3c4a42",
+                        "outline-variant": "#bbcabf",
+                        "error": "#ba1a1a"
+                    },
+                    fontFamily: {
+                        "headline-lg": ["Inter"], "headline-md": ["Inter"],
+                        "body-lg": ["Inter"], "body-md": ["Inter"],
+                        "label-sm": ["Inter"], "label-xs": ["Inter"]
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom Scrollbar for Dropdown */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #e0e3e5; border-radius: 10px; }
+        .hidden-view { display: none !important; }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md antialiased min-h-screen flex">
+
+<nav class="bg-surface-container-lowest fixed left-0 top-0 h-full w-[280px] shadow-sm z-50 flex flex-col py-8 px-4 hidden md:flex">
+    <div class="mb-8 px-4 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-bold">
+            <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">bolt</span>
+        </div>
+        <div>
+            <h1 class="font-bold text-[20px] text-primary leading-tight">PricePrecision</h1>
+            <p class="font-semibold text-[11px] text-on-surface-variant uppercase tracking-wider">Analytical Cockpit</p>
+        </div>
+    </div>
+    <div class="flex-1 overflow-y-auto space-y-2">
+        <a onclick="navigate('dashboard')" class="flex items-center gap-3 px-4 py-3 rounded-xl text-on-surface-variant hover:text-primary hover:bg-surface-container-low cursor-pointer active:scale-95 transition-all nav-link" id="nav-dashboard">
+            <span class="material-symbols-outlined">dashboard</span> Dashboard
+        </a>
+        <a onclick="navigate('list')" class="flex items-center gap-3 px-4 py-3 rounded-xl text-on-surface-variant hover:text-primary hover:bg-surface-container-low cursor-pointer active:scale-95 transition-all nav-link" id="nav-list">
+            <span class="material-symbols-outlined">shopping_basket</span> Shopping List
+        </a>
+        <div class="pt-4 pb-2 px-4 text-[11px] font-bold text-outline-variant uppercase tracking-wider">Categories</div>
+        <a onclick="search('Meat')" class="flex items-center gap-3 px-4 py-3 rounded-xl text-on-surface-variant hover:text-primary hover:bg-surface-container-low cursor-pointer active:scale-95 transition-all">
+            <span class="material-symbols-outlined">restaurant</span> Meat & Seafood
+        </a>
+        <a onclick="search('Eggs')" class="flex items-center gap-3 px-4 py-3 rounded-xl text-on-surface-variant hover:text-primary hover:bg-surface-container-low cursor-pointer active:scale-95 transition-all">
+            <span class="material-symbols-outlined">egg_alt</span> Dairy & Eggs
+        </a>
+        <a onclick="search('Bakery')" class="flex items-center gap-3 px-4 py-3 rounded-xl text-on-surface-variant hover:text-primary hover:bg-surface-container-low cursor-pointer active:scale-95 transition-all">
+            <span class="material-symbols-outlined">bakery_dining</span> Bakery
+        </a>
+    </div>
+</nav>
+
+<div class="flex-1 md:ml-[280px] flex flex-col min-h-screen relative">
+    
+    <header class="bg-background/80 backdrop-blur-md fixed top-0 right-0 w-full md:w-[calc(100%-280px)] h-[80px] flex items-center justify-between px-10 z-40">
+        <div class="flex-1 max-w-2xl relative">
+            <div class="relative flex items-center focus-within:ring-2 focus-within:ring-primary/20 rounded-full bg-surface-container-lowest shadow-sm h-12 px-4 transition-all">
+                <span class="material-symbols-outlined text-on-surface-variant mr-3">search</span>
+                <input id="searchInput" class="flex-1 bg-transparent border-none focus:outline-none text-on-surface placeholder:text-on-surface-variant/50 font-body-md" placeholder="Search brands, products or stores..." type="text"/>
+            </div>
+            <div id="suggestDropdown" class="absolute top-14 left-0 w-full bg-surface-container-lowest shadow-lg rounded-2xl border border-surface-container-high hidden overflow-hidden z-50 max-h-[300px] overflow-y-auto">
+                </div>
+        </div>
+    </header>
+
+    <main id="view-dashboard" class="flex-1 pt-[104px] px-10 pb-12 overflow-y-auto hidden-view">
+        <div class="max-w-[1200px] mx-auto grid grid-cols-12 gap-8">
+            <section class="col-span-12 lg:col-span-8 flex flex-col gap-8">
+                <div class="bg-surface-container-lowest rounded-[32px] p-10 shadow-sm relative overflow-hidden flex flex-col justify-center min-h-[260px] border border-surface-container-high">
+                    <div class="relative z-10">
+                        <h2 class="text-[36px] font-bold text-on-surface mb-2 tracking-tight">Intelligence Dashboard.</h2>
+                        <p class="text-[18px] text-on-surface-variant max-w-md mb-8" id="dash-summary">
+                            Loading your metrics...
+                        </p>
+                        <div class="flex gap-4">
+                            <button onclick="navigate('list')" class="bg-primary text-on-primary font-medium py-3 px-8 rounded-full shadow-sm hover:opacity-90 transition-opacity">View List</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <section class="col-span-12 lg:col-span-4 flex flex-col gap-8">
+                <div class="bg-surface-container-lowest rounded-[32px] p-8 shadow-sm h-full flex flex-col border border-surface-container-high">
+                    <h3 class="text-[20px] font-bold text-on-surface mb-6" id="trend-title">Price Watch</h3>
+                    <div class="flex-1 w-full relative">
+                        <canvas id="dashChart" style="width: 100%; height: 100%;"></canvas>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <main id="view-search-results" class="flex-1 pt-[104px] px-10 pb-12 overflow-y-auto hidden-view">
+        <div class="mb-8 flex justify-between items-end">
+            <div>
+                <h2 id="search-title" class="text-[32px] font-bold text-on-surface mb-1 tracking-tight">Search Results</h2>
+                <p class="text-[16px] text-on-surface-variant">Comparing real-time prices across major supermarkets.</p>
+            </div>
+        </div>
+        
+        <div id="loader" class="hidden w-full py-20 flex justify-center">
+            <span class="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
+        </div>
+
+        <div id="results-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 mb-12">
+            </div>
+    </main>
+
+    <main id="view-list" class="flex-1 pt-[104px] px-10 pb-12 overflow-y-auto hidden-view">
+        <div class="mb-8">
+            <h2 class="text-[32px] font-bold text-on-surface tracking-tight">Optimizer</h2>
+            <p class="text-[16px] text-on-surface-variant mt-1">Refining your itinerary for maximum efficiency.</p>
+        </div>
+        <div class="bg-surface-container-lowest rounded-[32px] shadow-sm p-10 border border-surface-container-high">
+            <div class="flex items-center justify-between mb-6 pb-4 border-b border-surface-container-high">
+                <h3 class="text-[20px] font-bold text-on-surface">Active List</h3>
+                <span id="list-count-badge" class="text-[14px] bg-surface-container-low text-on-surface-variant px-4 py-1 rounded-full font-medium">0 Items</span>
+            </div>
+            <ul id="list-container" class="flex flex-col gap-2">
+                </ul>
+        </div>
+    </main>
+
+</div>
+
+<script>
+    const API_BASE = "http://localhost:8787/api/search";
+    const input = document.getElementById('searchInput');
+    const suggestDropdown = document.getElementById('suggestDropdown');
+    let catalog = [];
+
+    // --- NAVIGATION & ROUTING ---
+    function navigate(viewId) {
+        document.querySelectorAll('main').forEach(m => m.classList.add('hidden-view'));
+        document.querySelectorAll('.nav-link').forEach(l => {
+            l.classList.remove('bg-surface-container-low', 'text-primary', 'font-semibold');
+            l.classList.add('text-on-surface-variant');
+        });
+        
+        const targetView = document.getElementById(`view-${viewId}`);
+        const targetNav = document.getElementById(`nav-${viewId}`);
+        
+        if (targetView) targetView.classList.remove('hidden-view');
+        if (targetNav) {
+            targetNav.classList.remove('text-on-surface-variant');
+            targetNav.classList.add('bg-surface-container-low', 'text-primary', 'font-semibold');
+        }
+
+        if (viewId === 'dashboard') renderDashboard();
+        if (viewId === 'list') renderList();
+    }
+
+    // --- AUTO SUGGEST ENGINE ---
+    window.onload = async () => { 
+        navigate('dashboard'); 
+        try {
+            const res = await fetch('http://localhost:8787/api/catalog');
+            if (res.ok) {
+                const data = await res.json();
+                catalog = data.catalog || [];
+            }
+        } catch (e) { console.warn("Catalog sync failed"); }
+    };
+
+    input.addEventListener('input', (e) => {
+        const val = e.target.value.toLowerCase();
+        suggestDropdown.innerHTML = '';
+        if (!val) { suggestDropdown.classList.add('hidden'); return; }
+
+        const matches = catalog.filter(c => c.toLowerCase().includes(val)).slice(0, 8);
+        if (matches.length > 0) {
+            suggestDropdown.innerHTML = matches.map(m => `
+                <div class="px-5 py-3 hover:bg-surface-container-low cursor-pointer text-on-surface font-medium transition-colors" onclick="search('${m.replace(/'/g, "\\'")}')">
+                    ${m}
+                </div>
+            `).join('');
+            suggestDropdown.classList.remove('hidden');
+        } else {
+            suggestDropdown.classList.add('hidden');
+        }
+    });
+
+    // Close dropdown on click outside
+    document.addEventListener('click', (e) => {
+        if (!input.contains(e.target) && !suggestDropdown.contains(e.target)) suggestDropdown.classList.add('hidden');
+    });
+
+    input.addEventListener('keypress', (e) => { 
+        if (e.key === 'Enter') {
+            suggestDropdown.classList.add('hidden');
+            search(input.value); 
+        }
+    });
+
+    window.search = (q) => { 
+        input.value = q; 
+        suggestDropdown.classList.add('hidden');
+        navigate('search-results');
+        doSearch(q); 
+    };
+
+    // --- SEARCH ENGINE (TAILWIND INJECTION) ---
+    async function doSearch(q) {
+        document.getElementById('search-title').innerText = `Search Results: ${q}`;
+        const grid = document.getElementById('results-grid');
+        const loader = document.getElementById('loader');
+        
+        grid.innerHTML = '';
+        loader.classList.remove('hidden');
+
+        try {
+            const res = await fetch(`${API_BASE}?q=${encodeURIComponent(q)}`);
+            if (!res.ok) throw new Error("API returned status: " + res.status);
+            const data = await res.json();
+            const products = data.products || [];
+
+            if (products.length === 0) {
+                grid.innerHTML = `<div class="col-span-full text-center py-20 text-on-surface-variant font-medium">No results found for "${q}".</div>`;
+                return;
+            }
+
+            grid.innerHTML = products.map(product => {
+                if (!product.prices) return '';
+                const offers = Object.values(product.prices).filter(p => p && p.price > 0).sort((a, b) => a.price - b.price);
+                if (offers.length === 0) return '';
+
+                // Bulletproof Base64 Image Generation
+                const firstLetter = product.name ? product.name.charAt(0).toUpperCase() : '?';
+                const rawSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#f2f4f6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="80" font-weight="900" fill="#006c49">${firstLetter}</text></svg>`;
+                const fallbackSvg = `data:image/svg+xml;base64,${btoa(rawSvg)}`;
+                const imgUrl = (product.image && product.image.length > 5) ? product.image : fallbackSvg;
+
+                return `
+                    <div class="bg-surface-container-lowest rounded-[24px] overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-surface-container-high group relative flex flex-col h-full">
+                        <div class="aspect-[4/3] bg-surface-container-lowest relative w-full overflow-hidden p-6 flex items-center justify-center border-b border-surface-container-low">
+                            <img src="${imgUrl}" onerror="this.src='${fallbackSvg}'" class="max-w-full max-h-full object-contain group-hover:scale-105 transition-transform duration-500">
+                        </div>
+                        <div class="p-6 flex-1 flex flex-col">
+                            <h3 class="font-bold text-[16px] text-on-surface leading-snug line-clamp-2 mb-5">${product.name}</h3>
+                            <div class="mt-auto space-y-2">
+                                ${offers.map((o, i) => `
+                                    <div class="flex justify-between items-center p-3 rounded-xl ${i === 0 ? 'bg-primary/10 text-primary' : 'text-on-surface-variant bg-surface-container-lowest'}">
+                                        <span class="font-medium text-[13px] truncate max-w-[60%]">${o.original_name || o.store_name}</span>
+                                        <div class="text-right">
+                                            <span class="font-bold ${i === 0 ? 'text-[18px]' : 'text-[14px]'}">$${o.price.toFixed(2)}</span>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        <button onclick="addToList(this, '${encodeURIComponent(offers[0].original_name || product.name).replace(/'/g, '%27')}', ${offers[0].price}, '${encodeURIComponent(offers[0].store_name).replace(/'/g, '%27')}')" class="absolute bottom-6 right-6 w-11 h-11 bg-primary text-on-primary rounded-full shadow-md flex items-center justify-center hover:bg-primary-container transition-colors z-10 focus:outline-none">
+                            <span class="material-symbols-outlined text-[20px]">add</span>
+                        </button>
+                    </div>`;
+            }).join('');
+        } catch (e) {
+            grid.innerHTML = `<div class="col-span-full text-center text-error py-20">Data Load Failed: ${e.message}</div>`;
+        } finally {
+            loader.classList.add('hidden');
+        }
+    }
+
+    // --- SHOPPING LIST & GREEN CHECKMARK ---
+    window.addToList = function(btn, name, price, store) {
+        try {
+            let list = JSON.parse(localStorage.getItem('shoppingList') || '[]');
+            list.push({ 
+                name: decodeURIComponent(name), price: parseFloat(price), 
+                store: decodeURIComponent(store), date: new Date().toLocaleDateString() 
+            });
+            localStorage.setItem('shoppingList', JSON.stringify(list));
+            
+            const originalHtml = btn.innerHTML;
+            const originalBg = btn.style.backgroundColor || '';
+            
+            btn.innerHTML = '<span class="material-symbols-outlined text-[20px]">check</span>';
+            btn.style.backgroundColor = 'var(--primary)';
+            btn.style.pointerEvents = 'none';
+            
+            setTimeout(() => {
+                btn.innerHTML = originalHtml;
+                btn.style.backgroundColor = originalBg;
+                btn.style.pointerEvents = 'auto';
+            }, 2000);
+        } catch (e) { console.error("List Error", e); }
+    };
+
+    function renderDashboard() {
+        const list = JSON.parse(localStorage.getItem('shoppingList') || '[]');
+        const total = list.reduce((s, i) => s + i.price, 0);
+        document.getElementById('dash-summary').innerHTML = `You have <span class="font-bold text-on-surface">${list.length} items</span> in your list, totaling <span class="text-primary font-bold">$${total.toFixed(2)}</span>.`;
+        // Chart logic can be re-injected here
+    }
+
+    function renderList() {
+        const list = JSON.parse(localStorage.getItem('shoppingList') || '[]');
+        document.getElementById('list-count-badge').innerText = `${list.length} Items`;
+        const container = document.getElementById('list-container');
+        
+        if(list.length === 0) {
+            container.innerHTML = '<div class="py-10 text-on-surface-variant text-center">Your list is empty.</div>';
+            return;
+        }
+
+        container.innerHTML = list.map((item, index) => `
+            <li class="flex items-center justify-between p-4 rounded-xl hover:bg-surface-container-low transition-colors border border-transparent hover:border-surface-container-high group">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[12px] uppercase">
+                        ${item.name.charAt(0)}
+                    </div>
+                    <div>
+                        <p class="text-[14px] font-bold text-on-surface">${item.name}</p>
+                        <p class="text-[12px] font-medium text-primary">From ${item.store}</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-6">
+                    <p class="text-[16px] font-bold text-on-surface">$${item.price.toFixed(2)}</p>
+                    <button onclick="removeFromList(${index})" class="text-on-surface-variant group-hover:text-error transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-error-container/20">
+                        <span class="material-symbols-outlined text-[18px]">delete</span>
+                    </button>
+                </div>
+            </li>
+        `).join('');
+    }
+
+    window.removeFromList = function(index) {
+        let list = JSON.parse(localStorage.getItem('shoppingList') || '[]');
+        list.splice(index, 1);
+        localStorage.setItem('shoppingList', JSON.stringify(list));
+        renderList();
+    };
+
+</script>
+</body>
+</html>

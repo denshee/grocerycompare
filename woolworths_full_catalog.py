@@ -51,22 +51,24 @@ def batch_write(worksheet, products_buffer: list[dict], existing: dict, written_
             price_changed = (p["price"] is not None and p["price"] != old_data['price'])
             reg_price_changed = (p["was_price"] is not None and p["was_price"] != old_data['reg_price'])
             
+            # Update category if blank or 'Uncategorized'
+            cat_update_needed = (not old_data.get('category') or old_data.get('category') == "Uncategorized") and p.get('category')
             image_empty = not old_data.get('image') or "/placeholder" in old_data.get('image', '').lower()
             
-            if price_changed or reg_price_changed or image_empty:
+            if price_changed or reg_price_changed or image_empty or cat_update_needed:
                 img_to_update = p["image"] if image_empty else None
-                price_updates.append((old_data['row'], p["price"], p["was_price"], img_to_update))
+                price_updates.append((old_data['row'], p["price"], p["was_price"], img_to_update, p.get('category') if cat_update_needed else None))
                 if price_changed or reg_price_changed:
+                    # [timestamp, product_name, store_name, new_price, new_was_price]
                     history_rows.append([now_str, name, STORE_NAME, p["price"], p["was_price"] or ""])
         else:
             new_rows.append([
-                "", name, STORE_NAME,
+                "", name, p.get("category", "Uncategorized"), STORE_NAME,
                 p["price"] if p["price"] is not None else "",
                 p["was_price"] if p["was_price"] is not None else "",
                 "TRUE", p["image"],
             ])
-            history_rows.append([now_str, name, STORE_NAME, p["price"] if p["price"] is not None else "", p["was_price"] or ""])
-            existing[key] = {'row': -1, 'price': p["price"], 'reg_price': p["was_price"], 'image': p["image"]}
+            existing[key] = {'row': -1, 'price': p["price"], 'reg_price': p["was_price"], 'image': p["image"], 'category': p.get("category")}
 
         written_names.add(name)
 
@@ -177,6 +179,7 @@ def main():
                             if name and price:
                                 buffer.append({
                                     "name": name,
+                                    "category": slug.replace('-', ' ').title(),
                                     "price": price,
                                     "was_price": None, # Heavy scraper focus on current price
                                     "in_stock": "TRUE",

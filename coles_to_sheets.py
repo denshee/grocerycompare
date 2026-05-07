@@ -1,8 +1,20 @@
 import time
-import requests
+from curl_cffi import requests
+from tenacity import retry, wait_exponential, stop_after_attempt
 import urllib.parse
 from datetime import datetime
 import sheets_helper
+
+def extract_real_image(img_data):
+    if not img_data:
+        return ""
+    # In API scrapers, image_data is usually a dict or string
+    if isinstance(img_data, str):
+        return img_data
+    if isinstance(img_data, dict):
+        url = img_data.get("url") or img_data.get("src")
+        return url or ""
+    return ""
 
 # --- Search configuration ---
 PAGES_PER_TERM = 1
@@ -26,6 +38,7 @@ HEADERS = {
 }
 
 
+@retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(5))
 def fetch_coles_products(search_terms, pages_per_term=1, page_size=20):
     """Scrape all products from Coles API."""
     all_products = []
@@ -40,12 +53,14 @@ def fetch_coles_products(search_terms, pages_per_term=1, page_size=20):
             )
             print(f"  Fetching Coles '{term}' page {page + 1}...")
             try:
-                response = requests.get(url, headers=HEADERS, timeout=15)
+                response = requests.get(url, headers=HEADERS, impersonate="chrome110", timeout=15)
+                if response.status_code in [403, 429]:
+                    raise Exception(f"Bot protection block: {response.status_code}")
                 response.raise_for_status()
                 data = response.json()
-            except requests.RequestException as e:
+            except Exception as e:
                 print(f"  Error fetching '{term}' page {page + 1}: {e}")
-                break
+                raise e # Trigger tenacity retry
 
             products = []
             if "results" in data:
@@ -86,9 +101,8 @@ def build_upsert_data(products, store_name, existing):
         image_url = ""
         image_uris = product.get("imageUris", [])
         if isinstance(image_uris, list) and image_uris:
-            image_url = image_uris[0].get("url", "")
+            image_url = extract_real_image(image_uris[0])
 
-        key = (name, store_name)
         if key in existing:
             old_data = existing[key]
             # Compare prices
@@ -98,6 +112,7 @@ def build_upsert_data(products, store_name, existing):
             if price_changed or reg_price_changed:
                 print(f"  [Price Change] {name}: ${old_data['price']} -> ${price}")
                 price_updates.append((old_data['row'], price, was_price))
+                # [timestamp, product_name, store_name, new_price, new_was_price]
                 history_rows.append([now_str, name, store_name, price, was_price or ""])
         else:
             new_rows.append([
@@ -109,7 +124,6 @@ def build_upsert_data(products, store_name, existing):
                 bool(in_stock),
                 image_url
             ])
-            history_rows.append([now_str, name, store_name, price if price is not None else "", was_price or ""])
 
     return new_rows, price_updates, history_rows
 

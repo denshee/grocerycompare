@@ -15,11 +15,13 @@ SCOPES = [
 # Column indices (1-based) in the Listings sheet
 COL_LISTING_ID   = 1
 COL_PRODUCT_NAME = 2
-COL_STORE        = 3
-COL_CURRENT_PRICE = 4
-COL_REGULAR_PRICE = 5
-COL_IN_STOCK     = 6
-COL_IMAGE_URL    = 7
+COL_CATEGORY     = 3
+COL_STORE        = 4
+COL_CURRENT_PRICE = 5
+COL_REGULAR_PRICE = 6
+COL_IN_STOCK     = 7
+COL_IMAGE_URL    = 8
+COL_CANONICAL_ID = 9
 
 def get_sheets_client():
     """Create an authenticated gspread client."""
@@ -46,8 +48,10 @@ def get_history_worksheet():
     try:
         return sheet.worksheet('Price_History')
     except gspread.WorksheetNotFound:
-        # Fallback if someone deleted it
-        return sheet.add_worksheet(title="Price_History", rows=1000, cols=5)
+        # Phase 2 Cols: Date, Product_name, Store, Price, Regular_price
+        ws = sheet.add_worksheet(title="Price_History", rows=1000, cols=5)
+        ws.append_row(["Date", "Product_name", "Store", "Price", "Regular_price"], value_input_option='USER_ENTERED')
+        return ws
 
 
 def load_existing_listings(worksheet):
@@ -69,7 +73,8 @@ def load_existing_listings(worksheet):
     for i, row in enumerate(all_values[1:], start=2):
         if len(row) >= 3:
             name  = row[COL_PRODUCT_NAME - 1].strip()
-            store = row[COL_STORE - 1].strip()
+            category = row[COL_CATEGORY - 1].strip() if len(row) >= COL_CATEGORY else ""
+            store = row[COL_STORE - 1].strip() if len(row) >= COL_STORE else ""
             
             price = None
             if len(row) >= COL_CURRENT_PRICE:
@@ -91,12 +96,18 @@ def load_existing_listings(worksheet):
             if len(row) >= COL_IMAGE_URL:
                 image = row[COL_IMAGE_URL - 1].strip()
 
+            canonical_id = ""
+            if len(row) >= COL_CANONICAL_ID:
+                canonical_id = row[COL_CANONICAL_ID - 1].strip()
+
             if name and store:
                 existing[(name, store)] = {
                     'row': i,
                     'price': price,
                     'reg_price': reg_price,
-                    'image': image
+                    'image': image,
+                    'canonical_id': canonical_id,
+                    'category': category
                 }
     print(f"  Found {len(existing)} existing listings in sheet.")
     return existing
@@ -145,6 +156,12 @@ def batch_upsert(worksheet, store_name, new_rows, price_updates, history_rows=No
                 img_url = update[3]
                 img_cell = gspread.utils.rowcol_to_a1(row_num, COL_IMAGE_URL)
                 batch_data.append({'range': img_cell, 'values': [[img_url]]})
+
+            # Update Category if provided (V4 Taxonomy)
+            if len(update) > 4 and update[4]:
+                cat_val = update[4]
+                cat_cell = gspread.utils.rowcol_to_a1(row_num, COL_CATEGORY)
+                batch_data.append({'range': cat_cell, 'values': [[cat_val]]})
 
         worksheet.batch_update(batch_data, value_input_option='USER_ENTERED')
         updated = len(price_updates)

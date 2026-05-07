@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PricePrecision | Optimization Engine</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --blue: #2563eb;
+            --green: #22c55e;
+            --bg: #f8fafc;
+            --border: #e2e8f0;
+            --text: #1e293b;
+            --muted: #64748b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: white;
+            border-right: 1px solid var(--border);
+            padding: 24px;
+            position: fixed;
+            height: 100vh;
+            z-index: 1000;
+        }
+
+        .nav-item {
+            padding: 12px 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--muted);
+            font-weight: 600;
+            margin-bottom: 4px;
+            transition: 0.2s;
+        }
+
+        .nav-item:hover,
+        .nav-item.active {
+            background: #eff6ff;
+            color: var(--blue);
+        }
+
+        /* Main Content */
+        .main {
+            margin-left: 260px;
+            flex: 1;
+            padding: 40px;
+            width: calc(100% - 260px);
+        }
+
+        /* List Input Section */
+        .engine-card {
+            background: white;
+            border-radius: 24px;
+            border: 1px solid var(--border);
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+
+        .list-input-group {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .list-input {
+            flex: 1;
+            padding: 16px 20px;
+            border-radius: 50px;
+            border: 1px solid var(--border);
+            outline: none;
+            font-size: 1rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+        }
+
+        .btn-primary {
+            background: var(--blue);
+            color: white;
+            border: none;
+            padding: 16px 30px;
+            border-radius: 50px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        /* Checklist */
+        .checklist {
+            list-style: none;
+            margin-bottom: 25px;
+        }
+
+        .checklist-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            border-bottom: 1px solid #f1f5f9;
+            font-weight: 600;
+        }
+
+        .checklist-item:last-child {
+            border-bottom: none;
+        }
+
+        .remove-icon {
+            color: #f87171;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        /* Results Skeletons */
+        .section-title {
+            font-size: 0.75rem;
+            font-weight: 800;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 20px;
+            margin-top: 40px;
+        }
+
+        .store-comparison-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            opacity: 0.5;
+        }
+
+        .store-skeleton {
+            background: white;
+            border: 2px dashed var(--border);
+            padding: 25px;
+            border-radius: 20px;
+            text-align: center;
+        }
+
+        .savings-split-skeleton {
+            background: #f0fdf4;
+            border: 2px dashed var(--green);
+            padding: 40px;
+            border-radius: 24px;
+            margin-top: 20px;
+            opacity: 0.5;
+            text-align: center;
+        }
+
+        /* Auto-Suggest Styles */
+        .input-container {
+            position: relative;
+            flex: 1;
+        }
+
+        #auto-suggest-dropdown {
+            position: absolute;
+            top: calc(100% + 5px);
+            left: 0;
+            width: 100%;
+            background: white;
+            z-index: 50;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .suggestion-item {
+            padding: 12px 20px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: 0.2s;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+
+        .suggestion-item:hover {
+            background: #eff6ff;
+            color: var(--blue);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="sidebar">
+        <div style="font-size: 1.5rem; font-weight: 800; color: var(--blue); margin-bottom: 40px;"><i
+                class="fa-solid fa-bolt"></i> PricePrecision</div>
+        <div class="nav-item" onclick="location.href='index_v3.html'"><i class="fa-solid fa-house"></i> Home</div>
+        <div class="nav-item active"><i class="fa-solid fa-basket-shopping"></i> Shopping List</div>
+        <div class="nav-item"><i class="fa-solid fa-chart-line"></i> Analytics</div>
+
+        <div
+            style="margin: 30px 0 10px 16px; font-size: 0.7rem; font-weight: 800; color: var(--muted); text-transform: uppercase;">
+            Categories</div>
+        <div class="nav-item"><i class="fa-solid fa-drumstick-bite"></i> Meat & Seafood</div>
+        <div class="nav-item"><i class="fa-solid fa-cheese"></i> Dairy & Eggs</div>
+        <div class="nav-item"><i class="fa-solid fa-bread-slice"></i> Bakery</div>
+    </div>
+
+    <div class="main">
+        <h4
+            style="color: var(--muted); text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1px; margin-bottom: 8px;">
+            Optimization Engine</h4>
+        <h1 style="font-size: 2.5rem; font-weight: 900; margin-bottom: 30px;">Refine Your Marketplace List</h1>
+
+        <div class="engine-card">
+            <div class="list-input-group">
+                <div class="input-container">
+                    <input type="text" id="itemInput" class="list-input"
+                        placeholder="Loading catalog..." data-valid-selection="false" autocomplete="off" disabled>
+                    <div id="auto-suggest-dropdown"></div>
+                </div>
+                <button class="btn-primary" onclick="addItem()">Add to List</button>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div style="font-size: 0.75rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 1px;">Your Checklist</div>
+                <button onclick="clearList()" style="background: none; border: none; color: #f87171; font-size: 0.75rem; font-weight: 800; cursor: pointer; text-transform: uppercase; letter-spacing: 1px;">Clear List</button>
+            </div>
+            <ul id="shoppingList" class="checklist">
+                <div style="padding: 20px; text-align: center; color: var(--muted); font-size: 0.9rem;">
+                    <i class="fa-solid fa-clipboard-list fa-2xl" style="margin-bottom: 15px; opacity: 0.3;"></i><br>
+                    Your list is empty. Add items to begin optimization.
+                </div>
+            </ul>
+
+            <button id="optimizeBtn" class="btn-primary" onclick="optimizeShop()"
+                style="width: 100%; font-size: 1.1rem; padding: 20px; background: linear-gradient(135deg, #2563eb, #1e40af);">
+                <i class="fa-solid fa-microchip"></i> OPTIMIZE MY SHOP
+            </button>
+        </div>
+
+        <!-- Placeholder Sections -->
+        <div id="storeGrid" class="store-comparison-grid">
+            <div class="store-skeleton">
+                <div style="font-weight: 800; color: var(--muted);">Coles Total</div>
+                <div id="colesTotal" style="font-size: 1.5rem; font-weight: 900; margin-top: 10px;">$--.--</div>
+            </div>
+            <div class="store-skeleton">
+                <div style="font-weight: 800; color: var(--muted);">Woolworths Total</div>
+                <div id="woolworthsTotal" style="font-size: 1.5rem; font-weight: 900; margin-top: 10px;">$--.--</div>
+            </div>
+            <div class="store-skeleton">
+                <div style="font-weight: 800; color: var(--muted);">Aldi Total</div>
+                <div id="aldiTotal" style="font-size: 1.5rem; font-weight: 900; margin-top: 10px;">$--.--</div>
+            </div>
+        </div>
+
+        <div class="section-title">Maximum Savings Split</div>
+        <div id="splitResults" class="savings-split-skeleton">
+            <i class="fa-solid fa-layer-group fa-2xl" style="margin-bottom: 15px;"></i>
+            <h3>Multi-Store Split Algorithm</h3>
+            <p style="margin-top: 10px; color: #166534; font-weight: 600;">System will analyze local store stock to
+                calculate the most efficient split trip.</p>
+        </div>
+    </div>
+
+    <script>
+        const API_COMPARE = "http://localhost:8787/api/list/compare";
+        const listElement = document.getElementById('shoppingList');
+        const inputElement = document.getElementById('itemInput');
+        const dropdown = document.getElementById('auto-suggest-dropdown');
+        
+        let shoppingList = [];
+        let canonicalProducts = [];
+
+        // 1. LOAD CHECKLIST & CATALOG
+        async function loadData() {
+            // Load local storage
+            shoppingList = JSON.parse(localStorage.getItem('shoppingList') || '[]');
+            renderList();
+
+            // Load catalog for auto-suggest
+            try {
+                const res = await fetch('http://localhost:8787/api/catalog');
+                const data = await res.json();
+                canonicalProducts = data.catalog || [];
+                inputElement.disabled = false;
+                inputElement.placeholder = "Search products (e.g. Milk 2L)...";
+            } catch (err) {
+                console.error("Catalog Error:", err);
+                inputElement.placeholder = "Error loading catalog.";
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadData);
+
+        // 2. LIST MANAGEMENT
+        function addItem() {
+            const isValid = inputElement.getAttribute('data-valid-selection') === 'true';
+            const text = inputElement.value.trim();
+
+            if (!isValid && text) {
+                alert("Please select a valid product from the suggestions.");
+                return;
+            }
+
+            if (!text) return;
+
+            shoppingList.push({ name: text, date: new Date().toLocaleDateString() });
+            localStorage.setItem('shoppingList', JSON.stringify(shoppingList));
+            inputElement.value = '';
+            inputElement.setAttribute('data-valid-selection', 'false');
+            renderList();
+        }
+
+        function removeItem(index) {
+            shoppingList.splice(index, 1);
+            localStorage.setItem('shoppingList', JSON.stringify(shoppingList));
+            renderList();
+            resetResults();
+        }
+
+        function clearList() {
+            if (shoppingList.length === 0) return;
+            if (confirm('Are you sure you want to clear your entire list?')) {
+                shoppingList = [];
+                localStorage.removeItem('shoppingList');
+                renderList();
+                resetResults();
+            }
+        }
+
+        function resetResults() {
+            // Reset totals
+            document.getElementById('colesTotal').innerText = '$--.--';
+            document.getElementById('woolworthsTotal').innerText = '$--.--';
+            document.getElementById('aldiTotal').innerText = '$--.--';
+            document.getElementById('storeGrid').style.opacity = "0.5";
+            
+            // Reset split container
+            const splitContainer = document.getElementById('splitResults');
+            splitContainer.innerHTML = `
+                <i class="fa-solid fa-layer-group fa-2xl" style="margin-bottom: 15px;"></i>
+                <h3>Multi-Store Split Algorithm</h3>
+                <p style="margin-top: 10px; color: #166534; font-weight: 600;">System will analyze local store stock to calculate the most efficient split trip.</p>
+            `;
+            splitContainer.style.opacity = "0.5";
+            splitContainer.style.borderStyle = "dashed";
+        }
+
+        function renderList() {
+            if (shoppingList.length === 0) {
+                listElement.innerHTML = `
+                <div style="padding: 20px; text-align: center; color: var(--muted); font-size: 0.9rem;">
+                    <i class="fa-solid fa-clipboard-list fa-2xl" style="margin-bottom: 15px; opacity: 0.3;"></i><br>
+                    Your list is empty. Add items to begin optimization.
+                </div>`;
+                return;
+            }
+
+            listElement.innerHTML = shoppingList.map((item, index) => `
+                <li class="checklist-item">
+                    <span><i class="fa-solid fa-circle-check" style="color: var(--blue); margin-right: 12px;"></i> ${item.name}</span>
+                    <i class="fa-solid fa-trash-can remove-icon" onclick="removeItem(${index})"></i>
+                </li>
+            `).join('');
+        }
+
+        // 3. OPTIMIZATION LOGIC
+        async function optimizeShop() {
+            const btn = document.getElementById('optimizeBtn');
+            const originalContent = btn.innerHTML;
+            
+            if (shoppingList.length === 0) {
+                alert("Add items to your list first!");
+                return;
+            }
+
+            btn.innerText = "Optimizing...";
+            btn.disabled = true;
+
+            try {
+                const productNames = shoppingList.map(item => item.name);
+                const response = await fetch(API_COMPARE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ products: productNames })
+                });
+
+                const res = await response.json();
+                if (res.error) throw new Error(res.error);
+
+                // --- RENDER RESULTS ---
+                
+                // Section A: Single-Store Totals
+                const formatTotal = (val) => {
+                    if (val === null || val === undefined) {
+                        return `<span style="font-size:0.8rem; background:#fee2e2; color:#991b1b; padding:4px 8px; border-radius:6px; font-weight:700;">Items Missing</span>`;
+                    }
+                    return `$<span style="color:#166534; font-weight:900;">${parseFloat(val).toFixed(2)}</span>`;
+                };
+
+                document.getElementById('colesTotal').innerHTML = formatTotal(res.totals.Coles);
+                document.getElementById('woolworthsTotal').innerHTML = formatTotal(res.totals.Woolworths);
+                document.getElementById('aldiTotal').innerHTML = formatTotal(res.totals.Aldi);
+                document.getElementById('storeGrid').style.opacity = "1";
+
+                // Section B: Max Savings Split (Itinerary Generation)
+                const splitContainer = document.getElementById('splitResults');
+                splitContainer.innerHTML = ''; // Clear previous
+                splitContainer.style.opacity = "1";
+                splitContainer.style.borderStyle = "solid";
+                splitContainer.style.textAlign = "center";
+                
+                // Savings Subtext calculation
+                const validTotals = Object.values(res.totals).filter(v => v !== null && v !== undefined);
+                const maxSingle = validTotals.length > 0 ? Math.max(...validTotals) : res.savings.splitTotal;
+                const youSave = maxSingle - res.savings.splitTotal;
+
+                // Group breakdown by cheapest store
+                const grouped = res.breakdown.reduce((acc, item) => {
+                    const store = item.store || "Unknown";
+                    if (!acc[store]) acc[store] = [];
+                    acc[store].push(item);
+                    return acc;
+                }, {});
+
+                let splitHtml = `
+                    <div style="font-size: 3rem; font-weight: 900; color: var(--green); margin-bottom: 2px;">$${res.savings.splitTotal.toFixed(2)}</div>
+                    <div style="font-weight: 800; color: var(--muted); text-transform: uppercase; font-size: 0.75rem; letter-spacing: 1px; margin-bottom: 5px;">Optimized Split Trip</div>
+                    <div style="color: #166534; font-size: 0.9rem; font-weight: 700; margin-bottom: 35px;">
+                        <i class="fa-solid fa-piggy-bank"></i> You Save $${youSave.toFixed(2)} vs Market Peak
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; text-align: left;">
+                `;
+
+                // Render mini-cards for each store with items
+                Object.keys(grouped).sort().forEach(store => {
+                    const storeItems = grouped[store];
+                    if (storeItems.length === 0) return;
+
+                    splitHtml += `
+                        <div style="background: white; padding: 25px; border-radius: 20px; border: 1px solid var(--border); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                                <div style="font-weight: 900; color: var(--blue); font-size: 0.85rem; text-transform: uppercase;">Buy at ${store}</div>
+                                <span style="background: #eff6ff; color: var(--blue); font-size: 0.65rem; font-weight: 800; padding: 4px 10px; border-radius: 20px;">
+                                    ${storeItems.length} ITEMS
+                                </span>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                ${storeItems.map(item => `
+                                    <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px solid #f8fafc;">
+                                        <span style="font-size: 0.85rem; font-weight: 600; color: var(--text);">${item.name}</span>
+                                        <span style="font-size: 0.85rem; font-weight: 800; color: var(--blue);">$${item.price.toFixed(2)}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                splitHtml += `</div>`;
+                splitContainer.innerHTML = splitHtml;
+
+            } catch (err) {
+                console.error("Optimization Failed:", err);
+                alert("Optimization Failed: " + err.message);
+            } finally {
+                btn.innerHTML = originalContent;
+                btn.disabled = false;
+            }
+        }
+
+        // --- AUTO-SUGGEST UTILITIES ---
+        inputElement.addEventListener('input', (e) => {
+            const query = e.target.value.trim().toLowerCase();
+            inputElement.setAttribute('data-valid-selection', 'false');
+            if (query.length < 2) { dropdown.style.display = 'none'; return; }
+            const matches = canonicalProducts.filter(p => p.toLowerCase().includes(query));
+            if (matches.length > 0) {
+                dropdown.innerHTML = matches.map(match => `<div class="suggestion-item" onclick="selectSuggestion('${match.replace(/'/g, "\\'")}')">${match}</div>`).join('');
+                dropdown.style.display = 'block';
+            } else { dropdown.style.display = 'none'; }
+        });
+
+        function selectSuggestion(value) {
+            inputElement.value = value;
+            inputElement.setAttribute('data-valid-selection', 'true');
+            dropdown.style.display = 'none';
+        }
+
+        document.addEventListener('click', (e) => {
+            if (!inputElement.contains(e.target) && !dropdown.contains(e.target)) dropdown.style.display = 'none';
+        });
+
+        inputElement.addEventListener('keypress', (e) => { if (e.key === 'Enter') addItem(); });
+    </script>
+
+</body>
+
+</html>

@@ -3,3 +3,12 @@ main = "worker.js"
 compatibility_date = "2024-01-01"
 
 [vars]
+# Add global configuration here
+
+[[kv_namespaces]]
+binding = "GROCERY_LISTS"
+id = "767087851e44449887752e5050f28892"
+
+[[kv_namespaces]]
+binding = "MARKET_DATA"
+id = "55a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2" # Placeholder for new market data

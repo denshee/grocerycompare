@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         category: ["fruit-veg", "meat-seafood", "dairy-eggs-fridge", "bakery", "deli", "pantry", "frozen-foods", "drinks", "health-beauty", "household", "baby", "pet", "international-foods", "entertaining"]
     steps:
@@ -34,9 +35,11 @@ jobs:
 
   # ── COLES SHARDED JOBS ────────────────────────────────────────────────────
   coles-sync:
+    needs: woolworths-sync
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         category: ["meat-seafood", "fruit-vegetables", "dairy-eggs-fridge", "bakery", "deli", "pantry", "drinks", "frozen", "household", "health-beauty", "baby", "pet", "liquor"]
     steps:
@@ -59,9 +62,11 @@ jobs:
 
   # ── ALDI SHARDED JOBS ─────────────────────────────────────────────────────
   aldi-sync:
+    needs: coles-sync
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         category: ["fruits-vegetables", "meat-seafood", "deli-chilled-meats", "dairy-eggs-fridge", "pantry", "bakery", "freezer", "drinks", "health-beauty", "baby", "cleaning-household", "pets", "liquor", "snacks-confectionery"]
     steps:
@@ -79,5 +84,5 @@ jobs:
       run: echo '${{ secrets.GCP_CREDENTIALS }}' > credentials.json
     - name: Run Aldi Scraper
       env:
-        GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+        GOOGLE_SHEET_ID: 14cci7jorS43qBbAW673-jh_394TPHeCcC4lYAOqIk0k
       run: python aldi_full_catalog.py --category ${{ matrix.category }}

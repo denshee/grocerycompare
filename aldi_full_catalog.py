@@ -12,6 +12,8 @@ import argparse
 import re
 from datetime import datetime
 import sheets_helper
+from playwright_stealth import Stealth
+from tenacity import retry, wait_exponential, stop_after_attempt
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
@@ -68,22 +70,25 @@ def batch_write(worksheet, products_buffer: list[dict],
             # Aldi rarely has reg_price in catalog, but we check if it exists
             reg_price_changed = (p["was_price"] is not None and p["was_price"] != old_data['reg_price'])
 
+            # Update category if blank or 'Uncategorized'
+            cat_update_needed = (not old_data.get('category') or old_data.get('category') == "Uncategorized") and p.get('category')
             image_empty = not old_data.get('image')
 
-            if price_changed or reg_price_changed or image_empty:
-                # Tuple format: (row, price, reg_price, image_url)
-                price_updates.append((old_data['row'], p["price"], p["was_price"], p["image"] if image_empty else None))
+            if price_changed or reg_price_changed or image_empty or cat_update_needed:
+                img_to_update = p["image"] if image_empty else None
+                # Tuple format: (row, price, reg_price, image_url, category)
+                price_updates.append((old_data['row'], p["price"], p["was_price"], img_to_update, p.get('category') if cat_update_needed else None))
                 if price_changed or reg_price_changed:
+                    # [timestamp, product_name, store_name, new_price, new_was_price]
                     history_rows.append([now_str, name, STORE_NAME, p["price"], p["was_price"] or ""])
         else:
             new_rows.append([
-                "", name, STORE_NAME,
+                "", name, p.get("category", "Uncategorized"), STORE_NAME,
                 p["price"] if p["price"] is not None else "",
                 p["was_price"] if p["was_price"] is not None else "",
                 p["in_stock"], p["image"],
             ])
-            history_rows.append([now_str, name, STORE_NAME, p["price"] if p["price"] is not None else "", p["was_price"] or ""])
-            existing[key] = {'row': -1, 'price': p["price"], 'reg_price': p["was_price"]}
+            existing[key] = {'row': -1, 'price': p["price"], 'reg_price': p["was_price"], 'category': p.get("category")}
 
         written_names.add(name)
 
@@ -91,6 +96,32 @@ def batch_write(worksheet, products_buffer: list[dict],
         worksheet, STORE_NAME, new_rows, price_updates, history_rows
     )
     return created, updated
+
+@retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(5))
+def visit_page(page, url):
+    """Navigates to URL and triggers lazy-loaded content."""
+    print(f"      Visiting: {url}")
+    page.goto(url, wait_until="domcontentloaded", timeout=45_000)
+    
+    # Scroll to bottom to trigger lazy-loaded images
+    page.evaluate("""
+        async () => {
+            await new Promise((resolve) => {
+                let totalHeight = 0;
+                let distance = 100;
+                let timer = setInterval(() => {
+                    let scrollHeight = document.body.scrollHeight;
+                    window.scrollBy(0, distance);
+                    totalHeight += distance;
+                    if(totalHeight >= scrollHeight - window.innerHeight){
+                        clearInterval(timer);
+                        resolve();
+                    }
+                }, 100);
+            });
+        }
+    """)
+    page.wait_for_timeout(2000) # Give images a moment to render
 
 def main():
     parser = argparse.ArgumentParser(description="Aldi full catalogue scraper")
@@ -134,6 +165,7 @@ def main():
             viewport={"width": 1280, "height": 800}
         )
         page = context.new_page()
+        Stealth().use_sync(page) # <-- INJECTED STEALTH
 
         for base_url in ALDI_CATEGORIES:
             category_name = base_url.split('/')[-3]
@@ -142,9 +174,7 @@ def main():
             while True:
                 url = base_url + f"?page={page_num}"
                 try:
-                    print(f"      Visiting page {page_num}: {url}")
-                    page.goto(url, wait_until="domcontentloaded", timeout=45_000)
-                    page.wait_for_timeout(2000)
+                    visit_page(page, url)
                     
                     tiles = page.locator("div.product-tile").all()
                     if not tiles:
@@ -154,16 +184,19 @@ def main():
                     products_on_page = 0
                     for tile in tiles:
                         try:
-                            name_el = tile.locator(".product-tile__name p").first
                             price_el = tile.locator(".base-price__regular span").first
-                            # Handle cases where price might be hidden or different
+                            
+                            # Fallback to general text if specific 'p' tag is missing
+                            name_el = tile.locator(".product-tile__name").first
                             if not name_el.is_visible(): continue
                             
                             name = name_el.inner_text().strip()
                             brand = ""
-                            if tile.locator(".product-tile__brandname p").is_visible():
-                                brand = tile.locator(".product-tile__brandname p").first.inner_text().strip()
-                            if brand: name = f"{brand} {name}"
+                            if tile.locator(".product-tile__brandname").is_visible():
+                                brand = tile.locator(".product-tile__brandname").first.inner_text().strip()
+                            
+                            if brand and brand.lower() not in name.lower(): 
+                                name = f"{brand} {name}"
                             
                             price_text = price_el.inner_text().strip() if price_el.is_visible() else ""
                             price = clean_price(price_text)
@@ -172,7 +205,14 @@ def main():
                             if img_url.startswith("//"): img_url = "https:" + img_url
 
                             if name and price:
-                                buffer.append({"name": name, "price": price, "was_price": None, "in_stock": "TRUE", "image": img_url})
+                                buffer.append({
+                                    "name": name,
+                                    "category": category_name.replace('-', ' ').title(),
+                                    "price": price,
+                                    "was_price": None,
+                                    "in_stock": "TRUE",
+                                    "image": img_url
+                                })
                                 products_on_page += 1
                         except: pass
                     

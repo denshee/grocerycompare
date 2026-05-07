@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PricePrecision | Analytical Cockpit</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --blue: #2563eb;
+            --green: #22c55e;
+            --bg: #f8fafc;
+            --border: #e2e8f0;
+            --text: #1e293b;
+            --muted: #64748b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: white;
+            border-right: 1px solid var(--border);
+            padding: 24px;
+            position: fixed;
+            height: 100vh;
+            z-index: 1000;
+        }
+
+        .nav-item {
+            padding: 12px 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--muted);
+            font-weight: 600;
+            margin-bottom: 4px;
+            transition: 0.2s;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background: #eff6ff;
+            color: var(--blue);
+        }
+
+        /* Main Content */
+        .main {
+            margin-left: 260px;
+            flex: 1;
+            padding: 40px;
+            width: calc(100% - 260px);
+        }
+
+        .search-container {
+            position: relative;
+            max-width: 600px;
+            margin-bottom: 20px;
+        }
+
+        .search-container i {
+            position: absolute;
+            left: 18px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--muted);
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 16px 20px 16px 50px;
+            border-radius: 50px;
+            border: 1px solid var(--border);
+            outline: none;
+            font-size: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+        }
+
+        /* Chips */
+        .chips {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            overflow-x: auto;
+            padding-bottom: 10px;
+        }
+
+        .chip {
+            padding: 8px 20px;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: 0.2s;
+        }
+
+        .chip:hover {
+            border-color: var(--blue);
+            color: var(--blue);
+        }
+
+        /* Grid & Cards */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 24px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 24px;
+            border: 1px solid var(--border);
+            padding: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .hero {
+            grid-column: 1/-1;
+            margin-bottom: 30px;
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 24px;
+        }
+
+        /* Product UI */
+        .offer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            background: white;
+            margin-top: 8px;
+            transition: 0.2s;
+        }
+
+        .winner {
+            background: #f0fdf4;
+            border-color: var(--green);
+        }
+
+        .btn-add {
+            background: var(--blue);
+            border: none;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #loader {
+            display: none;
+            text-align: center;
+            padding: 100px;
+            grid-column: 1/-1;
+        }
+
+        .product-tile:hover { transform: translateY(-4px); }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <div style="font-size: 1.5rem; font-weight: 800; color: var(--blue); margin-bottom: 40px;">
+        <i class="fa-solid fa-bolt"></i> PricePrecision
+    </div>
+    <div class="nav-item active" onclick="navigate('home')"><i class="fa-solid fa-house"></i> Home</div>
+    <div class="nav-item" onclick="navigate('list')"><i class="fa-solid fa-basket-shopping"></i> Shopping List</div>
+    <div class="nav-item" onclick="navigate('analytics')"><i class="fa-solid fa-chart-line"></i> Analytics</div>
+    
+    <div style="margin: 30px 0 10px 16px; font-size: 0.7rem; font-weight: 800; color: var(--muted); text-transform: uppercase;">Categories</div>
+    <div class="nav-item" onclick="search('Meat')"><i class="fa-solid fa-drumstick-bite"></i> Meat & Seafood</div>
+    <div class="nav-item" onclick="search('Dairy')"><i class="fa-solid fa-cheese"></i> Dairy & Eggs</div>
+    <div class="nav-item" onclick="search('Bakery')"><i class="fa-solid fa-bread-slice"></i> Bakery</div>
+</div>
+
+<div class="main">
+    <div class="search-container">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" id="searchInput" class="search-input" placeholder="Search brands, products or stores..." list="searchSuggestions">
+        <datalist id="searchSuggestions"></datalist>
+    </div>
+
+    <div class="chips">
+        <div class="chip" onclick="search('Full Cream Milk')">Full Cream</div>
+        <div class="chip" onclick="search('Oat Milk')">Oat Milk</div>
+        <div class="chip" onclick="search('Eggs')">Eggs</div>
+        <div class="chip" onclick="search('Sourdough')">Sourdough</div>
+    </div>
+
+    <div id="view" class="grid"></div>
+    <div id="loader"><i class="fa-solid fa-circle-notch fa-spin fa-2xl" style="color: var(--blue)"></i></div>
+</div>
+
+<script>
+    const API_BASE = "http://localhost:8787/api/search";
+    const view = document.getElementById('view');
+    const input = document.getElementById('searchInput');
+    let trendChartInstance = null;
+
+    function navigate(page) {
+        if (page === 'home') { input.value = ''; renderDashboard(); }
+        else { window.location.href = page + '.html'; }
+    }
+
+    window.search = (q) => { input.value = q; doSearch(q); };
+
+    async function renderDashboard() {
+        view.className = "hero";
+        let listCount = 0;
+        let listTotal = 0;
+        let trendData = "Add items to your list to track trends.";
+        let trendItem = "Price Watch";
+
+        // Read Local State
+        try {
+            const list = JSON.parse(localStorage.getItem('shoppingList') || '[]');
+            listCount = list.length;
+            listTotal = list.reduce((sum, item) => sum + item.price, 0);
+
+            // Fetch Live Trend for the first item in the list
+            if (list.length > 0) {
+                trendItem = list[0].name;
+                trendData = "Loading...";
+                // We render immediately with 'Loading', then update when fetch completes
+            }
+        } catch (e) {
+            console.error("Dashboard memory read failed", e);
+        }
+
+        // Render Initial UI
+        view.innerHTML = `
+            <div class="card">
+                <h1 style="font-size: 3rem; font-weight: 900; margin-bottom: 10px;">Intelligence Dashboard</h1>
+                <p style="color: var(--muted); font-size: 1.1rem;">You have <strong style="color: var(--blue)">${listCount}</strong> items in your list, totaling <strong style="color: var(--green)">$${listTotal.toFixed(2)}</strong>.</p>
+                <div style="margin-top: 30px; height: 80px; background: linear-gradient(90deg, #eff6ff, white); border-radius: 16px; border-left: 5px solid var(--blue); display:flex; align-items:center; padding: 0 20px; font-weight:700; color:var(--blue);">Ready for Optimization.</div>
+            </div>
+            <div class="card" id="trendCard">
+                <h3 style="font-weight: 800; margin-bottom: 15px; color:var(--text);">${trendItem}</h3>
+                <div style="font-size: 0.85rem; color: var(--muted);" id="trendContent">${trendData}</div>
+            </div>`;
+
+        // Background Fetch for Trends
+        if (listCount > 0) {
+            try {
+                const resRaw = await fetch(`http://localhost:8787/api/price-history?product=${encodeURIComponent(trendItem)}`);
+                if (resRaw.ok) {
+                    const res = await resRaw.json();
+                    const stats = res.stats || {};
+                    // Grab the trend for Coles as a baseline, or any available store
+                    const storeData = stats['Coles'] || stats['Woolworths'] || stats['Aldi'];
+                    
+                    const tc = document.getElementById('trendContent');
+                    if (tc) {
+                        if (storeData) {
+                            let trendColor = storeData.trend === 'up' ? 'red' : (storeData.trend === 'down' ? 'var(--green)' : 'var(--muted)');
+                            let trendIcon = storeData.trend === 'up' ? '↑' : (storeData.trend === 'down' ? '↓' : '→');
+                            tc.innerHTML = `
+                                Current Avg: $${storeData.avg_price.toFixed(2)} <br>
+                                Trend: <span style="color: ${trendColor}; font-weight: 800;">${storeData.trend.toUpperCase()} ${trendIcon}</span>
+                            `;
+                        } else {
+                            tc.innerHTML = "Insufficient historical data.";
+                        }
+                    }
+                } else {
+                    const tc = document.getElementById('trendContent');
+                    if (tc) tc.innerHTML = "Trend API unavailable.";
+                }
+            } catch (e) {
+                const tc = document.getElementById('trendContent');
+                if (tc) tc.innerHTML = "Trend sync failed.";
+            }
+        }
+    }
+
+    async function doSearch(q) {
+        if (!q) return renderDashboard();
+        const view = document.getElementById('view') || document.getElementById('productGrid');
+        view.className = "grid";
+        document.getElementById('loader').style.display = 'block';
+        view.innerHTML = '';
+
+        try {
+            const res = await fetch(`${API_BASE}?q=${encodeURIComponent(q)}`);
+            if (!res.ok) throw new Error("API returned status: " + res.status);
+            const data = await res.json();
+            
+            const products = data.products || [];
+
+            if (products.length === 0) {
+                view.innerHTML = `<div class="card" style="grid-column: 1/-1; text-align: center; padding: 60px; font-weight:600; color:#64748b;">No results found for "${q}".</div>`;
+                return;
+            }
+
+            // Render Pre-Grouped Data from the Worker
+            view.innerHTML = products.map(product => {
+                if (!product.prices) return '';
+                
+                // Extract offers and sort them by cheapest first
+                const offers = Object.values(product.prices)
+                    .filter(p => p && p.price > 0)
+                    .sort((a, b) => a.price - b.price);
+                
+                if (offers.length === 0) return '';
+
+                const firstLetter = product.name ? product.name.charAt(0).toUpperCase() : '?';
+                const rawSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#eff6ff"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="80" font-weight="900" fill="#2563eb">${firstLetter}</text></svg>`;
+                const fallbackSvg = `data:image/svg+xml;base64,${btoa(rawSvg)}`;
+                const imgUrl = (product.image && product.image.length > 5) ? product.image : fallbackSvg;
+                const title = product.id ? product.id.replace(/-/g, ' ').toUpperCase() : (product.name ? product.name.toUpperCase() : 'UNKNOWN');
+
+                return `
+                    <div class="card product-tile" onclick="if(event.target.tagName !== 'BUTTON' && event.target.tagName !== 'I') openTrendModal('${encodeURIComponent(product.name)}', '${product.id || product.name}')" style="display:flex; flex-direction:column; gap: 15px; background:white; padding:20px; border-radius:24px; border:1px solid #e2e8f0; cursor: pointer; transition: transform 0.2s;">
+                        <div style="height:120px; display:flex; align-items:center; justify-content:center;">
+                            <img src="${imgUrl}" style="max-height:100%; max-width:100%; object-fit:contain;" onerror="this.src='${fallbackSvg}'">
+                        </div>
+                        <div style="font-weight: 800; font-size: 0.75rem; color: #2563eb; letter-spacing: 1px;">${title}</div>
+                        <div>
+                            ${offers.map((o, i) => `
+                                <div class="offer" style="margin-bottom: 8px; padding: 10px; border-radius: 12px; border: 1px solid ${i === 0 ? '#22c55e' : '#e2e8f0'}; background: ${i === 0 ? '#f0fdf4' : 'white'}; display: flex; justify-content: space-between; align-items: center;">
+                                    <div style="max-width: 70%;">
+                                        <div style="font-size: 0.8rem; font-weight: 700; line-height: 1.2;">${o.original_name || product.name}</div>
+                                        <div style="font-size: 0.6rem; font-weight: 800; color: #64748b; text-transform: uppercase; margin-top:4px;">${o.store_name || 'Market'}</div>
+                                    </div>
+                                    <div style="text-align: right; display:flex; align-items:center; gap: 10px;">
+                                        <div>
+                                            <div style="font-size: 1.1rem; font-weight: 900; color: ${i === 0 ? '#166534' : '#1e293b'}">$${o.price.toFixed(2)}</div>
+                                            ${i === 0 ? '<div style="font-size: 0.5rem; background: #22c55e; color: white; padding: 2px 4px; border-radius: 4px; font-weight: 900; display:inline-block;">WINNER</div>' : ''}
+                                        </div>
+                                        <button class="btn-add" onclick="addToList(this, '${encodeURIComponent(o.original_name || product.name).replace(/'/g, '%27')}', ${o.price}, '${encodeURIComponent(o.store_name || 'Market').replace(/'/g, '%27')}')" title="Add to List" style="background:#2563eb; border:none; color:white; width:28px; height:28px; border-radius:50%; cursor:pointer;">
+                                            +
+                                        </button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>`;
+            }).join('');
+        } catch (e) {
+            view.innerHTML = `<div class="card" style="grid-column: 1/-1; text-align: center; color: red; padding: 60px;"><b>Data Load Failed:</b><br>${e.message}</div>`;
+        } finally {
+            document.getElementById('loader').style.display = 'none';
+        }
+    }
+
+    // --- THE SHOPPING LIST ENGINE ---
+    window.addToList = function(btn, name, price, store) {
+        try {
+            let list = JSON.parse(localStorage.getItem('shoppingList') || '[]');
+            list.push({ 
+                name: decodeURIComponent(name), 
+                price: parseFloat(price), 
+                store: decodeURIComponent(store), 
+                date: new Date().toLocaleDateString() 
+            });
+            localStorage.setItem('shoppingList', JSON.stringify(list));
+            
+            // Premium Visual Feedback
+            const originalHtml = btn.innerHTML;
+            const originalBg = btn.style.backgroundColor || '';
+            
+            btn.innerHTML = '<i class="fa-solid fa-check"></i>';
+            btn.style.backgroundColor = 'var(--green)';
+            btn.style.pointerEvents = 'none';
+            
+            // Reset button after 2 seconds
+            setTimeout(() => {
+                btn.innerHTML = originalHtml;
+                btn.style.backgroundColor = originalBg;
+                btn.style.pointerEvents = 'auto';
+            }, 2000);
+            
+        } catch (e) {
+            console.error("List Error:", e);
+        }
+    };
+
+    window.onload = async () => { 
+        renderDashboard(); 
+        
+        // Background Catalog Sync for Auto-Suggest
+        try {
+            const res = await fetch('http://localhost:8787/api/catalog');
+            if (res.ok) {
+                const data = await res.json();
+                const datalist = document.getElementById('searchSuggestions');
+                if (datalist && data.catalog) {
+                    datalist.innerHTML = data.catalog.map(item => `<option value="${item.replace(/"/g, '&quot;')}">`).join('');
+                }
+            }
+        } catch (e) {
+            console.warn("Catalog sync failed, auto-suggest disabled.", e);
+        }
+    };
+    input.addEventListener('keypress', (e) => { if (e.key === 'Enter') search(input.value); });
+
+    async function openTrendModal(encodedName, canonicalId) {
+        document.getElementById('trendModal').style.display = 'flex';
+        document.getElementById('modalTitle').innerText = decodeURIComponent(encodedName) + ' Trends';
+        
+        try {
+            const res = await fetch(API_BASE.replace('/search', '/price-history') + '?product=' + encodedName);
+            const data = await res.json();
+            
+            if (!data.history || data.history.length === 0) {
+                console.log("No history for", canonicalId);
+                return;
+            }
+
+            const ctx = document.getElementById('priceChart').getContext('2d');
+            if (trendChartInstance) trendChartInstance.destroy();
+
+            // Group data points by store
+            const storeSeries = data.history.reduce((acc, point) => {
+                if (!acc[point.store]) acc[point.store] = [];
+                acc[point.store].push({ x: point.timestamp, y: point.price });
+                return acc;
+            }, {});
+
+            const colors = { 'Coles': '#2563eb', 'Woolworths': '#22c55e', 'Aldi': '#f59e0b' };
+
+            trendChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: Object.keys(storeSeries).map(store => ({
+                        label: store,
+                        data: storeSeries[store],
+                        borderColor: colors[store] || '#64748b',
+                        tension: 0.3,
+                        pointRadius: 4
+                    }))
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: { type: 'category', grid: { display: false } },
+                        y: { beginAtZero: false, grid: { color: '#f1f5f9' } }
+                    },
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        } catch (e) {
+            console.error("Trend visualization failed", e);
+        }
+    }
+</script>
+
+    <div id="trendModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.6); z-index:9999; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+        <div style="background:white; width:90%; max-width:700px; border-radius:24px; padding:30px; box-shadow:0 10px 25px rgba(0,0,0,0.1); position:relative;">
+            <button onclick="document.getElementById('trendModal').style.display='none'" style="position:absolute; top:20px; right:20px; background:none; border:none; font-size:1.5rem; cursor:pointer; color:var(--muted);">&times;</button>
+            <h2 id="modalTitle" style="color:var(--blue); font-weight:800; margin-bottom:20px;">Price History</h2>
+            <canvas id="priceChart" width="400" height="200"></canvas>
+        </div>
+    </div>
+
+</body>
+</html>

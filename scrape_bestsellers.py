@@ -93,7 +93,7 @@ def build_upsert_data(products, store_name, existing):
                 img_update = image_url if image_missing else None
                 price_updates.append((old_data['row'], price, was_price, img_update))
                 if price_changed or reg_price_changed:
-                    history_rows.append([now_str, name, store_name, price, was_price or ""])
+                    history_rows.append([now_str, old_data.get('canonical_id', ''), name, store_name, price, was_price or ""])
         else:
             new_rows.append([
                 "", name, store_name,
@@ -102,7 +102,7 @@ def build_upsert_data(products, store_name, existing):
                 "TRUE" if in_stock else "FALSE",
                 image_url
             ])
-            history_rows.append([now_str, name, store_name, price if price is not None else "", was_price or ""])
+            history_rows.append([now_str, "", name, store_name, price if price is not None else "", was_price or ""])
             existing[key] = {'row': -1, 'price': price, 'reg_price': was_price}
 
     return new_rows, price_updates, history_rows

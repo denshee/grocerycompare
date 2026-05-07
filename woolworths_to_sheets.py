@@ -1,11 +1,23 @@
 import time
-import requests
+from curl_cffi import requests
+from tenacity import retry, wait_exponential, stop_after_attempt
 import urllib.parse
 from datetime import datetime
 import sheets_helper
 
+def extract_real_image(img_data):
+    if not img_data:
+        return ""
+    # In API scrapers, image_data is usually a string URL
+    if isinstance(img_data, str):
+        return img_data
+    if isinstance(img_data, dict):
+        url = img_data.get("url") or img_data.get("src") or img_data.get("MediumImageFile")
+        return url or ""
+    return ""
+
 # --- Search configuration ---
-PAGES_PER_TERM = 1
+PAGES_PER_TERM = 3
 PAGE_SIZE = 36
 
 SEARCH_TERMS = [
@@ -16,6 +28,7 @@ SEARCH_TERMS = [
 ]
 
 
+@retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(5))
 def fetch_woolworths_products(search_terms, pages_per_term=1, page_size=36):
     """Scrape all products from Woolworths API."""
     headers = {
@@ -36,12 +49,14 @@ def fetch_woolworths_products(search_terms, pages_per_term=1, page_size=36):
             )
             print(f"  Fetching Woolworths '{term}' page {page}...")
             try:
-                response = requests.get(url, headers=headers, timeout=15)
+                response = requests.get(url, headers=headers, impersonate="chrome110", timeout=15)
+                if response.status_code in [403, 429]:
+                    raise Exception(f"Bot protection block: {response.status_code}")
                 response.raise_for_status()
                 data = response.json()
-            except requests.RequestException as e:
+            except Exception as e:
                 print(f"  Error fetching '{term}' page {page}: {e}")
-                continue
+                raise e # Trigger tenacity retry
 
             bundles = data.get("Products", [])
             if not bundles:
@@ -75,10 +90,9 @@ def build_upsert_data(products, store_name, existing):
         price     = product.get("Price")
         was_price = product.get("WasPrice")
         in_stock  = product.get("IsInStock")
-        image_url = product.get("MediumImageFile", "")
+        image_url = extract_real_image(product.get("MediumImageFile", ""))
 
         key = (name, store_name)
-        if key in existing:
             # Existing product — check if price changed
             old_data = existing[key]
             price_changed = (price is not None and price != old_data['price'])
@@ -87,7 +101,7 @@ def build_upsert_data(products, store_name, existing):
             if price_changed or reg_price_changed:
                 print(f"  [Price Change] {name}: ${old_data['price']} -> ${price}")
                 price_updates.append((old_data['row'], price, was_price))
-                # Log to history
+                # Log to history: [timestamp, product_name, store_name, new_price, new_was_price]
                 history_rows.append([now_str, name, store_name, price, was_price or ""])
         else:
             # New product
@@ -100,8 +114,6 @@ def build_upsert_data(products, store_name, existing):
                 bool(in_stock),
                 image_url or ""
             ])
-            # Log initial price to history
-            history_rows.append([now_str, name, store_name, price if price is not None else "", was_price or ""])
 
     return new_rows, price_updates, history_rows
 
