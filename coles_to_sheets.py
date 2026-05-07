@@ -103,17 +103,34 @@ def build_upsert_data(products, store_name, existing):
         if isinstance(image_uris, list) and image_uris:
             image_url = extract_real_image(image_uris[0])
 
+        key = (name, store_name)
         if key in existing:
             old_data = existing[key]
             # Compare prices
             price_changed = (price is not None and price != old_data['price'])
             reg_price_changed = (was_price is not None and was_price != old_data['reg_price'])
 
-            if price_changed or reg_price_changed:
-                print(f"  [Price Change] {name}: ${old_data['price']} -> ${price}")
-                price_updates.append((old_data['row'], price, was_price))
-                # [timestamp, product_name, store_name, new_price, new_was_price]
-                history_rows.append([now_str, name, store_name, price, was_price or ""])
+            # Also check if image or category is missing in sheet
+            image_empty = not old_data.get('image')
+            cat_empty = not old_data.get('category') or old_data.get('category') == "Uncategorized"
+
+            if price_changed or reg_price_changed or image_empty or cat_empty:
+                # Row slice: [Category, Store, Price, WasPrice, InStock, Image, CanonicalID]
+                row_slice = [
+                    old_data.get('category') or "Uncategorized",
+                    store_name,
+                    price if price is not None else old_data['price'],
+                    was_price if was_price is not None else old_data['reg_price'],
+                    "TRUE" if in_stock else "FALSE",
+                    image_url or old_data.get('image') or "",
+                    old_data.get('canonical_id') or ""
+                ]
+                price_updates.append((old_data['row'], row_slice))
+                
+                if price_changed or reg_price_changed:
+                    print(f"  [Price Change] {name}: ${old_data['price']} -> ${price}")
+                    # [timestamp, product_name, store_name, new_price, new_was_price]
+                    history_rows.append([now_str, name, store_name, price, was_price or ""])
         else:
             new_rows.append([
                 "",           # Listing_ID

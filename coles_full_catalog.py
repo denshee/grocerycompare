@@ -51,8 +51,18 @@ def batch_write(worksheet, products_buffer: list[dict],
             image_missing = not old_data.get('image') or "/placeholder" in old_data.get('image', '').lower()
             
             if price_changed or reg_price_changed or image_missing or cat_update_needed:
-                img_to_update = p["image"] if image_missing else None
-                price_updates.append((old_data['row'], p["price"], p["was_price"], img_to_update, p.get('category') if cat_update_needed else None))
+                # Optimized Row Slice: [Category, Store, Price, WasPrice, InStock, Image, CanonicalID]
+                row_slice = [
+                    p.get('category') or old_data.get('category') or "Uncategorized",
+                    STORE_NAME,
+                    p["price"],
+                    p["was_price"] or old_data.get('reg_price') or "",
+                    "TRUE",
+                    p["image"] or old_data.get('image') or "",
+                    old_data.get('canonical_id') or ""
+                ]
+                price_updates.append((old_data['row'], row_slice))
+                
                 if price_changed or reg_price_changed:
                     # [timestamp, product_name, store_name, new_price, new_was_price]
                     history_rows.append([now_str, name, STORE_NAME, p["price"], p["was_price"] or ""])

@@ -166,39 +166,6 @@ def batch_upsert(worksheet, store_name, new_rows, price_updates, history_rows=No
             worksheet.batch_update(batch_data, value_input_option='USER_ENTERED')
             updated = len(price_updates)
             time.sleep(2)
-    if price_updates:
-        print(f"  Updating {len(price_updates)} existing {store_name} prices...")
-        batch_data = []
-        for update in price_updates:
-            row_num = update[0]
-            price = update[1]
-            
-            # Update Current Price
-            cell = gspread.utils.rowcol_to_a1(row_num, COL_CURRENT_PRICE)
-            batch_data.append({'range': cell, 'values': [[price]]})
-            
-            # Update Regular Price if provided
-            if len(update) > 2 and update[2] is not None:
-                reg_price = update[2]
-                reg_cell = gspread.utils.rowcol_to_a1(row_num, COL_REGULAR_PRICE)
-                batch_data.append({'range': reg_cell, 'values': [[reg_price]]})
-            
-            # Update Image URL if provided
-            if len(update) > 3 and update[3]:
-                img_url = update[3]
-                img_cell = gspread.utils.rowcol_to_a1(row_num, COL_IMAGE_URL)
-                batch_data.append({'range': img_cell, 'values': [[img_url]]})
-
-            # Update Category if provided (V4 Taxonomy)
-            if len(update) > 4 and update[4]:
-                cat_val = update[4]
-                cat_cell = gspread.utils.rowcol_to_a1(row_num, COL_CATEGORY)
-                batch_data.append({'range': cat_cell, 'values': [[cat_val]]})
-
-        worksheet.batch_update(batch_data, value_input_option='USER_ENTERED')
-        updated = len(price_updates)
-        time.sleep(1)
-
     # 3. Append to Price_History
     if history_rows:
         print(f"  Logging {len(history_rows)} price changes to Price_History...")
