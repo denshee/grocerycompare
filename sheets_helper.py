@@ -16,24 +16,36 @@ def get_sheets_client():
         creds = Credentials.from_service_account_file('credentials.json', scopes=SCOPES)
     return gspread.authorize(creds)
 
+def get_listings_worksheet():
+    """Restored name for script compatibility"""
+    client = get_sheets_client()
+    return client.open_by_key(SHEET_ID).worksheet('Listings')
+
+def load_existing_listings(worksheet):
+    print("  [DEBUG] Loading existing data from Google Sheet...")
+    all_values = worksheet.get_all_values()
+    existing = {}
+    if len(all_values) < 2: return existing
+    for i, row in enumerate(all_values[1:], start=2):
+        if len(row) >= 4:
+            name, store = row[1].strip(), row[3].strip()
+            existing[(name, store)] = {'row': i, 'category': row[2], 'price': row[4]}
+    return existing
+
 def batch_upsert(worksheet, store_name, new_rows, price_updates, history_rows=None):
-    # CRITICAL DIAGNOSTIC
-    print(f"\n[DIAGNOSTIC] --- {store_name} Pre-Flight Check ---")
-    print(f"  Incoming New Rows: {len(new_rows)}")
-    print(f"  Incoming Updates:  {len(price_updates)}")
+    # CRITICAL DIAGNOSTIC - This is what we need to see in the logs
+    print(f"\n[DIAGNOSTIC] --- {store_name} DATA CHECK ---")
+    print(f"  New Rows found by scraper: {len(new_rows)}")
+    print(f"  Updates found by scraper:  {len(price_updates)}")
 
     if not new_rows and not price_updates:
-        print(f"❌ ERROR: {store_name} tried to send EMPTY lists to the sheet.")
-        print(f"💡 REASON: The scraper found the website but failed to extract names/prices.")
-        # This will show up in red in your GitHub Actions logs
-        raise ValueError(f"SCRAPER FAILURE: {store_name} returned zero products. Check selectors.")
+        print(f"❌ ERROR: {store_name} scraper found NOTHING on the website.")
+        # We crash on purpose here so the log stays visible in GitHub
+        raise ValueError(f"CRITICAL: {store_name} scraper returned 0 items. Selectors are likely broken.")
 
-    # Only runs if data exists
-    created = 0
     if new_rows:
         print(f"✅ ACTION: Writing {len(new_rows)} new rows...")
         worksheet.append_rows(new_rows, value_input_option='USER_ENTERED')
-        created = len(new_rows)
         time.sleep(1)
 
-    return created, len(price_updates)
+    return len(new_rows), len(price_updates)
