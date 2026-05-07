@@ -2,6 +2,7 @@ import time
 import random
 import re
 from playwright.sync_api import sync_playwright
+from playwright_stealth import Stealth
 import sheets_helper
 
 STORE_NAME = "Coles"
@@ -18,33 +19,18 @@ def main():
     all_new_rows, all_updates = [], []
 
     with sync_playwright() as p:
-        # Use a Remote Browser WebSocket if you have one (e.g., Browserless)
-        # For now, we use a 'Hard-Launch' with specific args to bypass typical CI blocks
-        browser = p.chromium.launch(headless=True, args=[
-            '--disable-blink-features=AutomationControlled',
-            '--no-sandbox',
-            '--disable-dev-shm-usage'
-        ])
-        
-        context = browser.new_context(
-            viewport={'width': 1920, 'height': 1080},
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        )
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
         page = context.new_page()
+        Stealth().use_sync(page)
 
         for term in SEARCH_TERMS:
-            print(f"  [REMOTE BROWSER] Searching Coles: {term}")
+            print(f"  Searching Coles for: {term}")
             try:
-                # We use the mobile-friendly search URL which has lighter security
+                # Browser search like a real human
                 url = f"https://www.coles.com.au/search?q={term}"
-                page.goto(url, wait_until="load", timeout=90000)
-                
-                # Check for "Access Denied" or "Challenge"
-                if "Access Denied" in page.content():
-                    print(f"    ❌ Blocked by Coles Security on term: {term}")
-                    continue
-
-                page.wait_for_selector("[data-testid='product-tile']", timeout=45000)
+                page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                page.wait_for_selector("[data-testid='product-tile']", timeout=30000)
                 
                 tiles = page.locator("[data-testid='product-tile']").all()
                 for tile in tiles:
@@ -62,18 +48,13 @@ def main():
                             else:
                                 all_new_rows.append(["", name, "Pantry", STORE_NAME, price, "", "TRUE", img_url])
                     except: continue
-                
-                time.sleep(random.uniform(5, 10)) # Long pauses to avoid IP flagging
+                time.sleep(random.uniform(2, 4))
             except Exception as e:
-                print(f"    ⚠️ Failed {term}: {e}")
+                print(f"    ⚠️ Search failed for '{term}': {e}")
                 continue
-                
         browser.close()
 
-    if all_new_rows or all_updates:
-        sheets_helper.batch_upsert(worksheet, STORE_NAME, all_new_rows, all_updates)
-    else:
-        print("❌ NO DATA EXTRACTED. Security wall is still up.")
+    sheets_helper.batch_upsert(worksheet, STORE_NAME, all_new_rows, all_updates)
 
 if __name__ == "__main__":
     main()
