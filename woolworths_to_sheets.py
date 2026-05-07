@@ -5,169 +5,80 @@ import urllib.parse
 from datetime import datetime
 import sheets_helper
 
-def extract_real_image(img_data):
-    if not img_data:
-        return ""
-    # In API scrapers, image_data is usually a string URL
-    if isinstance(img_data, str):
-        return img_data
-    if isinstance(img_data, dict):
-        url = img_data.get("url") or img_data.get("src") or img_data.get("MediumImageFile")
-        return url or ""
-    return ""
-
-# --- Search configuration ---
-PAGES_PER_TERM = 3
+PAGES_PER_TERM = 1
 PAGE_SIZE = 36
 
 SEARCH_TERMS = [
-    "milk", "bread", "eggs", "butter", "cheese", "yoghurt",
-    "chicken breast", "beef mince", "rice", "pasta", "cereal",
-    "orange juice", "chips", "chocolate", "coffee", "tea",
-    "toilet paper", "dishwashing liquid"
+    "apples", "bananas", "strawberries", "blueberries", "grapes", "watermelon", "avocado",
+    "potatoes", "onions", "carrots", "broccoli", "lettuce", "tomatoes", "cucumber", "mushrooms",
+    "chicken breast", "chicken thighs", "beef mince", "steak", "lamb chops", "pork mince", "bacon", "ham", "eggs",
+    "milk", "full cream milk", "almond milk", "oat milk", "butter", "margarine", "greek yoghurt", 
+    "cheddar cheese", "mozzarella", "feta", "cream cheese", "sour cream", "dips",
+    "white bread", "wholemeal bread", "sourdough", "muffins", "crumpets", "tortillas", "rolls",
+    "white rice", "basmati rice", "pasta", "spaghetti", "pasta sauce", "olive oil", "vegetable oil",
+    "flour", "sugar", "honey", "peanut butter", "jam", "vegemite", "tinned tuna", "tinned tomatoes",
+    "baked beans", "corn flakes", "weet-bix", "oats", "muesli", "salt", "pepper", "mayonnaise",
+    "laundry detergent", "fabric softener", "dishwashing liquid", "dishwasher tablets", 
+    "toilet paper", "paper towels", "garbage bags", "multipurpose spray", "window cleaner", 
+    "shampoo", "conditioner", "body wash", "hand soap", "toothpaste", "sunscreen",
+    "frozen chips", "ice cream", "frozen pizza", "frozen peas", "frozen berries", "frozen meals",
+    "coffee beans", "instant coffee", "tea bags", "orange juice", "apple juice", "coca-cola", 
+    "sparkling water", "potato chips", "corn chips", "crackers", "chocolate", "biscuits",
+    "nappies", "baby wipes", "baby formula", "baby food", "cat food", "dog food", "cat litter"
 ]
 
-
 @retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(5))
-def fetch_woolworths_products(search_terms, pages_per_term=1, page_size=36):
-    """Scrape all products from Woolworths API."""
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/115.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://www.woolworths.com.au/"
-    }
-
+def fetch_woolworths_products(search_terms):
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/115.0.0.0 Safari/537.36"}
     all_products = []
-
     for term in search_terms:
         encoded_term = urllib.parse.quote(term)
-        for page in range(1, pages_per_term + 1):
-            url = (
-                f"https://www.woolworths.com.au/apis/ui/Search/products"
-                f"?searchTerm={encoded_term}&pageNumber={page}&pageSize={page_size}"
-            )
-            print(f"  Fetching Woolworths '{term}' page {page}...")
-            try:
-                response = requests.get(url, headers=headers, impersonate="chrome110", timeout=15)
-                if response.status_code in [403, 429]:
-                    raise Exception(f"Bot protection block: {response.status_code}")
-                response.raise_for_status()
-                data = response.json()
-            except Exception as e:
-                print(f"  Error fetching '{term}' page {page}: {e}")
-                raise e # Trigger tenacity retry
-
-            bundles = data.get("Products", [])
-            if not bundles:
-                break  # No more results for this term
-
-            for bundle in bundles:
-                all_products.extend(bundle.get("Products", []))
-
-            time.sleep(0.5)
-
+        url = f"https://www.woolworths.com.au/apis/ui/Search/products?searchTerm={encoded_term}&pageNumber=1&pageSize=36"
+        print(f"  Fetching Woolies '{term}'...")
+        try:
+            r = requests.get(url, headers=headers, impersonate="chrome110", timeout=15)
+            r.raise_for_status()
+            bundles = r.json().get("Products", [])
+            for b in bundles:
+                all_products.extend(b.get("Products", []))
+            time.sleep(1)
+        except Exception as e:
+            print(f"  Error fetching '{term}': {e}")
     return all_products
 
-
 def build_upsert_data(products, store_name, existing):
-    """Classify scraped products into new rows, price updates, and history logs."""
-    new_rows = []
-    price_updates = []
-    history_rows = []
+    new_rows, price_updates, history_rows = [], [], []
     seen_names = set()
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    for product in products:
-        if not product.get("IsAvailable"):
-            continue
-
-        name = product.get("DisplayName", "").strip()
-        if not name or name in seen_names:
-            continue
+    for p in products:
+        if not p.get("IsAvailable"): continue
+        name = p.get("DisplayName", "").strip()
+        if not name or name in seen_names: continue
         seen_names.add(name)
 
-        price     = product.get("Price")
-        was_price = product.get("WasPrice")
-        in_stock  = product.get("IsInStock")
-        image_url = extract_real_image(product.get("MediumImageFile", ""))
+        price, was_price = p.get("Price"), p.get("WasPrice")
+        img_url = p.get("MediumImageFile", "")
 
         key = (name, store_name)
         if key in existing:
-            # Existing product — check if price changed
-            old_data = existing[key]
-            price_changed = (price is not None and price != old_data['price'])
-            reg_price_changed = (was_price is not None and was_price != old_data['reg_price'])
-
-            # Also check if image or category is missing in sheet
-            image_empty = not old_data.get('image')
-            cat_empty = not old_data.get('category') or old_data.get('category') == "Uncategorized"
-
-            if price_changed or reg_price_changed or image_empty or cat_empty:
-                # Row slice: [Category, Store, Price, WasPrice, InStock, Image, CanonicalID]
-                row_slice = [
-                    old_data.get('category') or "Uncategorized",
-                    store_name,
-                    price if price is not None else old_data['price'],
-                    was_price if was_price is not None else old_data['reg_price'],
-                    "TRUE" if in_stock else "FALSE",
-                    image_url or old_data.get('image') or "",
-                    old_data.get('canonical_id') or ""
-                ]
-                price_updates.append((old_data['row'], row_slice))
-                
-                if price_changed or reg_price_changed:
-                    print(f"  [Price Change] {name}: ${old_data['price']} -> ${price}")
-                    # Log to history: [timestamp, product_name, store_name, new_price, new_was_price]
+            old = existing[key]
+            price_changed = (price is not None and price != old['price'])
+            if price_changed or not old.get('image') or old.get('category') == "Uncategorized":
+                row_slice = [old.get('category'), store_name, price, was_price, "TRUE", img_url or old.get('image'), old.get('canonical_id')]
+                price_updates.append((old['row'], row_slice))
+                if price_changed:
                     history_rows.append([now_str, name, store_name, price, was_price or ""])
         else:
-            # New product
-            new_rows.append([
-                "",           # Listing_ID
-                name,
-                store_name,
-                price if price is not None else "",
-                was_price if was_price is not None else "",
-                bool(in_stock),
-                image_url or ""
-            ])
-
+            new_rows.append(["", name, "Uncategorized", store_name, price or "", was_price or "", "TRUE", img_url])
     return new_rows, price_updates, history_rows
 
-
 def main():
-    print("=" * 50)
-    print("Woolworths → Google Sheets (+ Price History)")
-    print("=" * 50)
-
-    print("\n[1/4] Connecting to Google Sheets...")
     worksheet = sheets_helper.get_listings_worksheet()
-
-    print("\n[2/4] Loading existing sheet data...")
     existing = sheets_helper.load_existing_listings(worksheet)
-
-    print(f"\n[3/4] Scraping Woolworths ({len(SEARCH_TERMS)} terms)...")
-    products = fetch_woolworths_products(SEARCH_TERMS, PAGES_PER_TERM, PAGE_SIZE)
-    print(f"  Total raw products fetched: {len(products)}")
-
-    print("\n[4/4] Classifying and writing to Google Sheets (batch)...")
+    products = fetch_woolworths_products(SEARCH_TERMS)
     new_rows, price_updates, history_rows = build_upsert_data(products, "Woolworths", existing)
-    
-    print(f"  New rows to append   : {len(new_rows)}")
-    print(f"  Price updates        : {len(price_updates)}")
-    print(f"  History logs to append: {len(history_rows)}")
-
-    created, updated = sheets_helper.batch_upsert(
-        worksheet, "Woolworths", new_rows, price_updates, history_rows
-    )
-
-    print(f"\n{'=' * 50}")
-    print("WOOLWORTHS COMPLETE")
-    print(f"  Created : {created} new listings")
-    print(f"  Updated : {updated} existing prices")
-    print(f"  Logged  : {len(history_rows)} history entries")
-    print(f"{'=' * 50}")
-
+    sheets_helper.batch_upsert(worksheet, "Woolworths", new_rows, price_updates, history_rows)
 
 if __name__ == "__main__":
     main()

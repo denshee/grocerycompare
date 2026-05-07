@@ -1,221 +1,155 @@
-"""
-woolworths_full_catalog.py
---------------------------
-Heavy monthly scraper: browses ALL Woolworths categories via Playwright DOM 
-extraction for maximum resilience against API/cookie blocking.
-"""
-
 import argparse
 import random
 import sys
 import time
+import json
 from datetime import datetime
+from curl_cffi import requests
+from tenacity import retry, stop_after_attempt, wait_exponential
 import sheets_helper
 
-# ── Configuration ─────────────────────────────────────────────────────────────
-
 STORE_NAME = "Woolworths"
-BATCH_WRITE_EVERY = 500
-
-WW_BASE     = "https://www.woolworths.com.au"
+BATCH_WRITE_EVERY = 200 # Smaller batches for safety
 
 WOOLWORTHS_CATEGORIES = [
-    "fruit-veg", "meat-seafood", "dairy-eggs-fridge", "bakery", "deli",
-    "pantry", "frozen-foods", "drinks", "health-beauty", "household",
-    "baby", "pet", "international-foods", "entertaining",
+    "1-E5BEE36E", # Fruit & Veg
+    "1_D5A2236",  # Meat, Seafood & Deli
+    "1_6E4E4E4",  # Dairy, Eggs & Fridge
+    "1_9E9293F",  # Bakery
+    "1_39FD497",  # Pantry
+    "1_AC21391",  # Frozen-foods
+    "1_5AF3A0A",  # Drinks
+    "1_8E4E4E4",  # Health & Beauty
+    "1_2432B53",  # Household
 ]
 
-def clean_price(price_text: str) -> float | None:
-    import re
-    if not price_text: return None
-    cleaned = re.sub(r'[^\d.]', '', price_text)
+def clean_price(val) -> float | None:
+    if val is None: return None
     try:
-        return float(cleaned) if cleaned else None
+        return float(val)
     except:
         return None
 
-def batch_write(worksheet, products_buffer: list[dict], existing: dict, written_names: set) -> tuple[int, int]:
-    """Classify and flush to Google Sheets with history logging."""
-    new_rows      = []
+@retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=2, min=4, max=30))
+def fetch_woolies_page(category_id, page_number):
+    """Hits the Woolworths internal API with Chrome Impersonation."""
+    url = "https://www.woolworths.com.au/apis/ui/browse/category"
+    headers = {
+        "accept": "application/json, text/plain, */*",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "origin": "https://www.woolworths.com.au",
+        "referer": "https://www.woolworths.com.au/shop/browse/",
+    }
+    params = {
+        "categoryId": category_id,
+        "pageNumber": page_number,
+        "pageSize": 36,
+        "sortType": "Name",
+        "url": "/shop/browse/"
+    }
+    
+    # Impersonate Chrome 124
+    r = requests.get(url, params=params, headers=headers, impersonate="chrome124", timeout=30)
+    
+    if r.status_code == 403:
+        print("      [403] Akamai Block! Cooling down...")
+        raise Exception("Blocked by Akamai")
+        
+    return r.json()
+
+def batch_write(worksheet, products_buffer, existing, written_names):
+    new_rows = []
     price_updates = []
-    history_rows  = []
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    history_rows = []
+    now_str = datetime.now().strftime("%Y-%m-%d")
 
     for p in products_buffer:
         name = p["name"]
         if name in written_names: continue
-
         key = (name, STORE_NAME)
+        
         if key in existing:
-            old_data = existing[key]
-            price_changed = (p["price"] is not None and p["price"] != old_data['price'])
-            reg_price_changed = (p["was_price"] is not None and p["was_price"] != old_data['reg_price'])
+            old = existing[key]
+            # Update if price changed, or if category/image is missing
+            cat_needed = (not old.get('category') or old.get('category') == "Uncategorized")
+            img_needed = (not old.get('image') or "placeholder" in old.get('image', '').lower())
             
-            # Update category if blank or 'Uncategorized'
-            cat_update_needed = (not old_data.get('category') or old_data.get('category') == "Uncategorized") and p.get('category')
-            image_empty = not old_data.get('image') or "/placeholder" in old_data.get('image', '').lower()
-            
-            if price_changed or reg_price_changed or image_empty or cat_update_needed:
-                img_to_update = p["image"] if image_empty else None
-                price_updates.append((old_data['row'], p["price"], p["was_price"], img_to_update, p.get('category') if cat_update_needed else None))
-                if price_changed or reg_price_changed:
-                    # [timestamp, product_name, store_name, new_price, new_was_price]
+            if p["price"] != old['price'] or cat_needed or img_needed:
+                price_updates.append((
+                    old['row'], 
+                    p["price"], 
+                    p["was_price"], 
+                    p["image"] if img_needed else None,
+                    p["category"] if cat_needed else None
+                ))
+                if p["price"] != old['price']:
                     history_rows.append([now_str, name, STORE_NAME, p["price"], p["was_price"] or ""])
         else:
-            new_rows.append([
-                "", name, p.get("category", "Uncategorized"), STORE_NAME,
-                p["price"] if p["price"] is not None else "",
-                p["was_price"] if p["was_price"] is not None else "",
-                "TRUE", p["image"],
-            ])
-            existing[key] = {'row': -1, 'price': p["price"], 'reg_price': p["was_price"], 'image': p["image"], 'category': p.get("category")}
-
+            new_rows.append(["", name, p["category"], STORE_NAME, p["price"], p["was_price"] or "", "TRUE", p["image"]])
+            existing[key] = {'row': -1, 'price': p['price'], 'category': p['category']}
+        
         written_names.add(name)
 
-    created, updated = sheets_helper.batch_upsert(worksheet, STORE_NAME, new_rows, price_updates, history_rows)
-    return created, updated
+    return sheets_helper.batch_upsert(worksheet, STORE_NAME, new_rows, price_updates, history_rows)
 
 def main():
-    parser = argparse.ArgumentParser(description="Woolworths full catalogue scraper")
-    parser.add_argument("--category", type=str, help="Specific category slug to scrape")
-    parser.add_argument("--max-pages", type=int, default=None)
-    parser.add_argument("--dry-run", action="store_true")
-    args = parser.parse_args()
-
-    target_categories = WOOLWORTHS_CATEGORIES
-    if args.category:
-        if args.category in WOOLWORTHS_CATEGORIES:
-            target_categories = [args.category]
-        else:
-            print(f"Error: Category '{args.category}' not found in supported list.")
-            sys.exit(1)
-
-    print("=" * 60)
-    print(f"Woolworths Scrape {'(All)' if not args.category else args.category} → Google Sheets")
-    print("=" * 60)
-
-    print("\n[Phase 1] Connecting to Google Sheets...")
-    worksheet = None
-    existing  = {}
-    if not args.dry_run:
-        worksheet = sheets_helper.get_listings_worksheet()
-        existing  = sheets_helper.load_existing_listings(worksheet)
-
-    from playwright.sync_api import sync_playwright
-    from playwright_stealth import Stealth
+    print("\n[Phase 1] Connecting to Sheets...")
+    worksheet = sheets_helper.get_listings_worksheet()
+    existing = sheets_helper.load_existing_listings(worksheet)
     
-    print(f"\n[Phase 2] Booting Playwright...")
-    
-    total_created = 0
-    total_updated = 0
-    buffer = []
+    total_created, total_updated = 0, 0
     written_names = set()
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
+    for cat_id in WOOLWORTHS_CATEGORIES:
+        print(f"\n  Scraping Category ID: {cat_id}")
+        page = 1
+        buffer = []
         
-        for idx, slug in enumerate(target_categories):
-            # Session Rotation/Creation
-            context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-                viewport={"width": 1280, "height": 1024}
-            )
-            page = context.new_page()
-            Stealth().use_sync(page)
-            time.sleep(2)
-
-            print(f"\n  Category: {slug}")
-            page_num = 1
-            while True:
-                if args.max_pages and page_num > args.max_pages: break
+        while True:
+            try:
+                print(f"      Page {page}...")
+                data = fetch_woolies_page(cat_id, page)
+                bundles = data.get('Bundles', [])
+                if not bundles: break
                 
-                url = f"{WW_BASE}/shop/browse/{slug}?pageNumber={page_num}"
-                try:
-                    time.sleep(random.uniform(3, 7)) # Jitter
-                    print(f"      Loading page {page_num}...")
-                    page.goto(url, wait_until="networkidle", timeout=90_000)
+                for b in bundles:
+                    prod = b.get('Products', [{}])[0]
+                    if not prod: continue
                     
-                    # Wait for at least one product tile to appear
-                    try:
-                        page.wait_for_selector("wc-product-tile, wow-product-tile", timeout=30_000)
-                    except:
-                        print(f"      [Timeout] No product tiles appeared on page {page_num}.")
-                        # Check for 'No results' text
-                        if "no results" in page.content().lower():
-                            print("      [End] No results found. Category complete.")
-                            break
-                        # Maybe we are blocked
-                        if "access denied" in page.content().lower() or "blocked" in page.content().lower():
-                            print("      [BLOCKED] Akamai block detected.")
-                            break
+                    name = prod.get('Name')
+                    price = clean_price(prod.get('Price'))
+                    was_price = clean_price(prod.get('WasPrice'))
+                    img = prod.get('MediumImageFile')
                     
-                    # Human-like scrolling
-                    for _ in range(3):
-                        page.mouse.wheel(0, 1000)
-                        page.wait_for_timeout(random.randint(1000, 2000))
+                    if name and price:
+                        buffer.append({
+                            "name": name,
+                            "price": price,
+                            "was_price": was_price,
+                            "category": "Uncategorized", # To be mapped by Aisle logic later
+                            "image": img
+                        })
 
-                    tiles = page.locator("wc-product-tile, wow-product-tile").all()
-                    if not tiles:
-                        print(f"      No products found on page {page_num}. Ending category.")
-                        break
-                        
-                    products_on_page = 0
-                    for tile in tiles:
-                        try:
-                            # Woolworths title is usually in a.product-title-link
-                            name_el = tile.locator("a.product-title-link").first
-                            if not name_el.is_visible(): continue
-                            
-                            name = name_el.inner_text().strip()
-                            # Price is in .primary
-                            price_el = tile.locator(".primary").first
-                            price_text = price_el.inner_text().strip() if price_el.is_visible() else ""
-                            price = clean_price(price_text)
-                            
-                            # Image is the first img in the tile
-                            img_el = tile.locator("img").first
-                            img_url = img_el.get_attribute("src") or ""
-                            
-                            if name and price:
-                                buffer.append({
-                                    "name": name,
-                                    "category": slug.replace('-', ' ').title(),
-                                    "price": price,
-                                    "was_price": None, # Heavy scraper focus on current price
-                                    "in_stock": "TRUE",
-                                    "image": img_url
-                                })
-                                products_on_page += 1
-                        except:
-                            continue
-                    
-                    print(f"    Page {page_num}: +{products_on_page} items")
-                    
-                    if not args.dry_run and len(buffer) >= BATCH_WRITE_EVERY:
-                        print(f"  ══ Flushing {len(buffer)} items... ══")
-                        c, u = batch_write(worksheet, buffer, existing, written_names)
-                        total_created += c
-                        total_updated += u
-                        buffer = []
-                        
-                    if products_on_page < 10: break
-                    page_num += 1
-                except Exception as e:
-                    print(f"    Error on page {page_num}: {e}")
-                    break
-            
-            page.close()
-            context.close()
+                if len(buffer) >= BATCH_WRITE_EVERY:
+                    c, u = batch_write(worksheet, buffer, existing, written_names)
+                    total_created += c
+                    total_updated += u
+                    buffer = []
+                
+                time.sleep(random.uniform(2, 5)) # Safety Jitter
+                page += 1
+                if page > 50: break # Safety cap
+                
+            except Exception as e:
+                print(f"      Error: {e}")
+                break
+        
+        if buffer:
+            c, u = batch_write(worksheet, buffer, existing, written_names)
+            total_created += c
+            total_updated += u
 
-        browser.close()
-
-    if not args.dry_run and buffer:
-        print(f"  ══ Final Flush: {len(buffer)} items... ══")
-        c, u = batch_write(worksheet, buffer, existing, written_names)
-        total_created += c
-        total_updated += u
-
-    print(f"\nCOMPLETED. Created: {total_created} | Updated: {total_updated}")
+    print(f"\nFinished. Total Created: {total_created}, Updated: {total_updated}")
 
 if __name__ == "__main__":
     main()
