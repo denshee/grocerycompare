@@ -32,8 +32,7 @@ def clean_price(text):
 def main():
     worksheet = sheets_helper.get_listings_worksheet()
     existing = sheets_helper.load_existing_listings(worksheet)
-    buffer = []
-
+    
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
         context = browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
@@ -45,20 +44,16 @@ def main():
             print(f"  Scraping Aldi {cat_name}...")
             
             try:
-                # Increased timeout to 90s and using 'domcontentloaded' for speed/reliability
+                # 90 second timeout + faster 'domcontentloaded' check
                 page.goto(url, wait_until="domcontentloaded", timeout=90000)
-                time.sleep(random.uniform(3, 6)) # Human-like pause
+                page.wait_for_timeout(5000) # Give it 5 seconds to settle
                 
                 tiles = page.locator("div.product-tile").all()
-                products_found = 0
+                buffer = []
                 for tile in tiles:
                     try:
-                        name_el = tile.locator(".product-tile__name").first
+                        name = tile.locator(".product-tile__name").first.inner_text().strip()
                         price_el = tile.locator(".base-price__regular").first
-                        
-                        if not name_el.is_visible(): continue
-                        
-                        name = name_el.inner_text().strip()
                         price = clean_price(price_el.inner_text().strip())
                         
                         img_url = ""
@@ -68,37 +63,25 @@ def main():
                             if img_url and img_url.startswith("//"): img_url = "https:" + img_url
 
                         if name and price:
-                            buffer.append({
-                                "name": name, 
-                                "category": cat_name, 
-                                "price": price, 
-                                "was_price": None, 
-                                "in_stock": "TRUE", 
-                                "image": img_url
-                            })
-                            products_found += 1
+                            buffer.append({"name": name, "category": cat_name, "price": price, "image": img_url})
                     except: continue
                 
-                print(f"    Found {products_found} items in {cat_name}")
-
                 if buffer:
-                    # Leverage your built-in upsert logic
-                    new_rows, updates, history = [], [], []
+                    new_rows, updates = [], []
                     for item in buffer:
                         key = (item["name"], STORE_NAME)
                         if key in existing:
                             old = existing[key]
                             if item["price"] != old['price'] or old.get('category') == "Uncategorized":
-                                # row_slice: [Category, Store, Price, WasPrice, InStock, Image, CanonicalID]
                                 updates.append((old['row'], [item["category"], STORE_NAME, item["price"], None, "TRUE", item["image"], ""]))
                         else:
                             new_rows.append(["", item["name"], item["category"], STORE_NAME, item["price"], "", "TRUE", item["image"]])
                     
-                    sheets_helper.batch_upsert(worksheet, STORE_NAME, new_rows, updates, history)
-                    buffer = [] # Clear buffer after each category
+                    sheets_helper.batch_upsert(worksheet, STORE_NAME, new_rows, updates)
+                    print(f"    Uploaded {len(buffer)} items for {cat_name}")
                     
             except Exception as e:
-                print(f"  [Skip] Error loading {cat_name}: {e}")
+                print(f"  [SKIPPING] {cat_name} timed out or failed. Moving to next aisle. Error: {e}")
                 continue
 
         browser.close()
