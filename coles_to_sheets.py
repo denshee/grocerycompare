@@ -18,16 +18,17 @@ def human_delay(min_sec=2, max_sec=5):
     time.sleep(random.uniform(min_sec, max_sec))
 
 def simulate_human_behavior(page):
-    scroll_amount = random.randint(300, 800)
-    page.mouse.wheel(0, scroll_amount)
-    human_delay(1, 3)
-    page.mouse.wheel(0, -random.randint(100, scroll_amount))
-    
-    for _ in range(3):
-        x = random.randint(100, 1000)
-        y = random.randint(100, 800)
-        page.mouse.move(x, y, steps=10)
-        time.sleep(random.uniform(0.1, 0.5))
+    try:
+        scroll_amount = random.randint(300, 800)
+        page.mouse.wheel(0, scroll_amount)
+        human_delay(1, 3)
+        page.mouse.wheel(0, -random.randint(100, scroll_amount))
+        for _ in range(2):
+            x = random.randint(100, 1000)
+            y = random.randint(100, 800)
+            page.mouse.move(x, y, steps=10)
+            time.sleep(random.uniform(0.1, 0.5))
+    except: pass
 
 def main():
     worksheet = sheets_helper.get_listings_worksheet()
@@ -46,7 +47,7 @@ def main():
             "password": proxy_password
         }
 
-    print("  [WEEKLY PROXY MODE] Starting Best Sellers Sync with TRUE ROTATION...")
+    print("  [WEEKLY PROXY MODE] Starting Best Sellers Sync with LAZY LOADING...")
 
     for term in SEARCH_TERMS:
         print(f"  [WEEKLY] Searching: {term}")
@@ -69,11 +70,18 @@ def main():
                         timezone_id="Australia/Sydney",
                         ignore_https_errors=True 
                     )
+                    
+                    # Double the global timeouts for slow proxy nodes
+                    context.set_default_navigation_timeout(90000)
+                    context.set_default_timeout(90000)
+                    
                     page = context.new_page()
                     Stealth().use_sync(page)
 
                     url = f"https://www.coles.com.au/search?q={term}"
-                    page.goto(url, wait_until="domcontentloaded", timeout=45000)
+                    
+                    # THE FIX: Don't wait for the whole page. Just wait until the server responds ("commit")
+                    page.goto(url, wait_until="commit", timeout=90000)
                     
                     page_title = page.title()
                     if "Access Denied" in page_title or "Security" in page_title:
@@ -83,7 +91,9 @@ def main():
                         continue 
                     
                     simulate_human_behavior(page)
-                    page.wait_for_selector("[data-testid='product-tile']", timeout=30000)
+                    
+                    # Rely heavily on this selector to know when the data we actually care about is ready
+                    page.wait_for_selector("[data-testid='product-tile']", timeout=60000)
                     
                     tiles = page.locator("[data-testid='product-tile']").all()
                     
@@ -109,12 +119,7 @@ def main():
                     break 
 
                 except Exception as e:
-                    # THE FIX: WE ARE PRINTING THE ACTUAL NETWORK ERROR AGAIN
-                    error_msg = str(e).split('\n')[0] # Grab just the first line so it's readable
-                    title = "N/A"
-                    try: title = page.title()
-                    except: pass
-                    
+                    error_msg = str(e).split('\n')[0] 
                     print(f"    ⚠️ Failed (Attempt {attempt + 1}/{max_retries}). Error: {error_msg}")
                     if browser:
                         try: browser.close()
