@@ -47,7 +47,7 @@ def main():
             "password": proxy_password
         }
 
-    print("  [WEEKLY PROXY MODE] Starting Best Sellers Sync with LAZY LOADING...")
+    print("  [WEEKLY PROXY MODE] Starting Best Sellers Sync with RESOURCE BLOCKING...")
 
     for term in SEARCH_TERMS:
         print(f"  [WEEKLY] Searching: {term}")
@@ -71,17 +71,19 @@ def main():
                         ignore_https_errors=True 
                     )
                     
-                    # Double the global timeouts for slow proxy nodes
-                    context.set_default_navigation_timeout(90000)
-                    context.set_default_timeout(90000)
+                    context.set_default_navigation_timeout(60000)
+                    context.set_default_timeout(60000)
+                    
+                    # --- THE FIX: AGGRESSIVE RESOURCE BLOCKING ---
+                    # Blocks heavy visual assets to prevent residential proxies from timing out
+                    context.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font", "stylesheet"] else route.continue_())
                     
                     page = context.new_page()
                     Stealth().use_sync(page)
 
                     url = f"https://www.coles.com.au/search?q={term}"
                     
-                    # THE FIX: Don't wait for the whole page. Just wait until the server responds ("commit")
-                    page.goto(url, wait_until="commit", timeout=90000)
+                    page.goto(url, wait_until="domcontentloaded", timeout=60000)
                     
                     page_title = page.title()
                     if "Access Denied" in page_title or "Security" in page_title:
@@ -92,8 +94,7 @@ def main():
                     
                     simulate_human_behavior(page)
                     
-                    # Rely heavily on this selector to know when the data we actually care about is ready
-                    page.wait_for_selector("[data-testid='product-tile']", timeout=60000)
+                    page.wait_for_selector("[data-testid='product-tile']", timeout=30000)
                     
                     tiles = page.locator("[data-testid='product-tile']").all()
                     
@@ -102,6 +103,8 @@ def main():
                             name = tile.locator("[data-testid='product-title']").inner_text().strip()
                             price_text = tile.locator("[data-testid='total-price']").inner_text().strip()
                             price = clean_price(price_text)
+                            
+                            # The URL is still extracted perfectly even without downloading the image
                             img = tile.locator("img").first.get_attribute("src") or ""
 
                             if name and price:
@@ -115,7 +118,7 @@ def main():
                     
                     success = True
                     browser.close()
-                    human_delay(4, 8)
+                    human_delay(2, 4)
                     break 
 
                 except Exception as e:
