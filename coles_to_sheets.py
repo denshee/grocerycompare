@@ -53,9 +53,7 @@ def main():
         max_retries = 3
         success = False
 
-        # --- THE TRUE ROTATION RETRY LOOP ---
         for attempt in range(max_retries):
-            # Opening a brand new Playwright instance ensures a fresh TCP connection and a NEW Proxy IP
             with sync_playwright() as p:
                 browser = None
                 try:
@@ -77,20 +75,18 @@ def main():
                     url = f"https://www.coles.com.au/search?q={term}"
                     page.goto(url, wait_until="domcontentloaded", timeout=45000)
                     
-                    # Read the page title to see if Akamai caught us
                     page_title = page.title()
                     if "Access Denied" in page_title or "Security" in page_title:
                         print(f"    🚨 AKAMAI BLOCKED IP (Attempt {attempt + 1}). Forcing IP Rotation...")
                         browser.close()
                         human_delay(2, 4)
-                        continue # Skip to the next attempt with a new IP
+                        continue 
                     
                     simulate_human_behavior(page)
                     page.wait_for_selector("[data-testid='product-tile']", timeout=30000)
                     
                     tiles = page.locator("[data-testid='product-tile']").all()
                     
-                    # If we got tiles, process them and BREAK the retry loop
                     for tile in tiles:
                         try:
                             name = tile.locator("[data-testid='product-title']").inner_text().strip()
@@ -110,22 +106,23 @@ def main():
                     success = True
                     browser.close()
                     human_delay(4, 8)
-                    break # Break out of the retry loop, move to next search term
+                    break 
 
                 except Exception as e:
-                    # Capture the page title if it didn't completely time out
-                    title = "Network Timeout / Dead Node"
+                    # THE FIX: WE ARE PRINTING THE ACTUAL NETWORK ERROR AGAIN
+                    error_msg = str(e).split('\n')[0] # Grab just the first line so it's readable
+                    title = "N/A"
                     try: title = page.title()
                     except: pass
                     
-                    print(f"    ⚠️ Failed (Attempt {attempt + 1}/{max_retries}). Page Title: '{title}'. Reconnecting...")
+                    print(f"    ⚠️ Failed (Attempt {attempt + 1}/{max_retries}). Error: {error_msg}")
                     if browser:
                         try: browser.close()
                         except: pass
                     human_delay(2, 4)
         
         if not success:
-            print(f"    ❌ Completely skipped {term} after {max_retries} failed IP addresses.")
+            print(f"    ❌ Completely skipped {term} after {max_retries} failed attempts.")
 
     sheets_helper.batch_upsert(worksheet, STORE_NAME, all_new_rows, all_updates)
     print("  [WEEKLY PROXY MODE] Sync complete.")
