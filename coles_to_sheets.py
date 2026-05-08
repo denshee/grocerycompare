@@ -46,82 +46,86 @@ def main():
             "password": proxy_password
         }
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=True, 
-            proxy=proxy_settings,
-            slow_mo=random.randint(200, 500)
-        ) 
-        
-        # Adding ignore_https_errors to prevent strict proxy rejections
-        context = browser.new_context(
-            viewport={'width': 1366, 'height': 768},
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            locale="en-AU",
-            timezone_id="Australia/Sydney",
-            ignore_https_errors=True 
-        )
-        page = context.new_page()
-        Stealth().use_sync(page)
+    print("  [WEEKLY PROXY MODE] Starting Best Sellers Sync with TRUE ROTATION...")
 
-        print("  [WEEKLY PROXY MODE] Starting Best Sellers Sync...")
-        
-        # Quick homepage ping to initialize the proxy connection
-        try:
-            page.goto("https://www.coles.com.au/", wait_until="commit", timeout=30000)
-            simulate_human_behavior(page)
-        except Exception:
-            pass
+    for term in SEARCH_TERMS:
+        print(f"  [WEEKLY] Searching: {term}")
+        max_retries = 3
+        success = False
 
-        for term in SEARCH_TERMS:
-            print(f"  [WEEKLY] Searching: {term}")
-            
-            max_retries = 3
-            tiles = []
-            
-            # --- THE RETRY LOOP ---
-            for attempt in range(max_retries):
+        # --- THE TRUE ROTATION RETRY LOOP ---
+        for attempt in range(max_retries):
+            # Opening a brand new Playwright instance ensures a fresh TCP connection and a NEW Proxy IP
+            with sync_playwright() as p:
+                browser = None
                 try:
+                    browser = p.chromium.launch(
+                        headless=True, 
+                        proxy=proxy_settings,
+                        slow_mo=random.randint(200, 500)
+                    ) 
+                    context = browser.new_context(
+                        viewport={'width': 1366, 'height': 768},
+                        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                        locale="en-AU",
+                        timezone_id="Australia/Sydney",
+                        ignore_https_errors=True 
+                    )
+                    page = context.new_page()
+                    Stealth().use_sync(page)
+
                     url = f"https://www.coles.com.au/search?q={term}"
-                    # 45 second timeout. If the node is dead, fail fast and try a new one.
                     page.goto(url, wait_until="domcontentloaded", timeout=45000)
+                    
+                    # Read the page title to see if Akamai caught us
+                    page_title = page.title()
+                    if "Access Denied" in page_title or "Security" in page_title:
+                        print(f"    🚨 AKAMAI BLOCKED IP (Attempt {attempt + 1}). Forcing IP Rotation...")
+                        browser.close()
+                        human_delay(2, 4)
+                        continue # Skip to the next attempt with a new IP
                     
                     simulate_human_behavior(page)
                     page.wait_for_selector("[data-testid='product-tile']", timeout=30000)
                     
                     tiles = page.locator("[data-testid='product-tile']").all()
-                    if len(tiles) > 0:
-                        break # We got the data! Break out of the retry loop.
-                        
+                    
+                    # If we got tiles, process them and BREAK the retry loop
+                    for tile in tiles:
+                        try:
+                            name = tile.locator("[data-testid='product-title']").inner_text().strip()
+                            price_text = tile.locator("[data-testid='total-price']").inner_text().strip()
+                            price = clean_price(price_text)
+                            img = tile.locator("img").first.get_attribute("src") or ""
+
+                            if name and price:
+                                key = (name, STORE_NAME)
+                                if key in existing:
+                                    old = existing[key]
+                                    all_updates.append((old['row'], ["Pantry", STORE_NAME, price, None, "TRUE", img, ""]))
+                                else:
+                                    all_new_rows.append(["", name, "Pantry", STORE_NAME, price, "", "TRUE", img])
+                        except: continue
+                    
+                    success = True
+                    browser.close()
+                    human_delay(4, 8)
+                    break # Break out of the retry loop, move to next search term
+
                 except Exception as e:
-                    print(f"    ⚠️ Dead proxy node (Attempt {attempt + 1}/{max_retries}). Refreshing connection...")
+                    # Capture the page title if it didn't completely time out
+                    title = "Network Timeout / Dead Node"
+                    try: title = page.title()
+                    except: pass
+                    
+                    print(f"    ⚠️ Failed (Attempt {attempt + 1}/{max_retries}). Page Title: '{title}'. Reconnecting...")
+                    if browser:
+                        try: browser.close()
+                        except: pass
                     human_delay(2, 4)
-            # ----------------------
-
-            if not tiles:
-                print(f"    ❌ Skipping {term} after {max_retries} dead node attempts.")
-                continue
-
-            # If we made it here, we have a working node and real data.
-            for tile in tiles:
-                try:
-                    name = tile.locator("[data-testid='product-title']").inner_text().strip()
-                    price_text = tile.locator("[data-testid='total-price']").inner_text().strip()
-                    price = clean_price(price_text)
-                    img = tile.locator("img").first.get_attribute("src") or ""
-
-                    if name and price:
-                        key = (name, STORE_NAME)
-                        if key in existing:
-                            old = existing[key]
-                            all_updates.append((old['row'], ["Pantry", STORE_NAME, price, None, "TRUE", img, ""]))
-                        else:
-                            all_new_rows.append(["", name, "Pantry", STORE_NAME, price, "", "TRUE", img])
-                except: continue
-            
-            human_delay(5, 10)
-
-        browser.close()
+        
+        if not success:
+            print(f"    ❌ Completely skipped {term} after {max_retries} failed IP addresses.")
 
     sheets_helper.batch_upsert(worksheet, STORE_NAME, all_new_rows, all_updates)
     print("  [WEEKLY PROXY MODE] Sync complete.")
