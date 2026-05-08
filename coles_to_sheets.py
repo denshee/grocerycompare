@@ -34,7 +34,6 @@ def main():
     existing = sheets_helper.load_existing_listings(worksheet)
     all_new_rows, all_updates = [], []
 
-    # Securely grab your IPRoyal credentials from GitHub Secrets
     proxy_server = os.environ.get("PROXY_SERVER")
     proxy_username = os.environ.get("PROXY_USERNAME")
     proxy_password = os.environ.get("PROXY_PASSWORD")
@@ -46,64 +45,81 @@ def main():
             "username": proxy_username,
             "password": proxy_password
         }
-    else:
-        print("  ⚠️ CRITICAL: Proxy credentials missing from environment!")
 
     with sync_playwright() as p:
-        # Launching with the Residential Proxy Active
         browser = p.chromium.launch(
             headless=True, 
             proxy=proxy_settings,
             slow_mo=random.randint(200, 500)
         ) 
         
+        # Adding ignore_https_errors to prevent strict proxy rejections
         context = browser.new_context(
             viewport={'width': 1366, 'height': 768},
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             locale="en-AU",
-            timezone_id="Australia/Sydney"
+            timezone_id="Australia/Sydney",
+            ignore_https_errors=True 
         )
         page = context.new_page()
         Stealth().use_sync(page)
 
         print("  [WEEKLY PROXY MODE] Starting Best Sellers Sync...")
+        
+        # Quick homepage ping to initialize the proxy connection
         try:
-            page.goto("https://www.coles.com.au/", timeout=90000)
+            page.goto("https://www.coles.com.au/", wait_until="commit", timeout=30000)
             simulate_human_behavior(page)
-        except Exception as e:
-            print(f"  ⚠️ REAL ERROR ON HOMEPAGE: {str(e)}")
+        except Exception:
+            pass
 
         for term in SEARCH_TERMS:
             print(f"  [WEEKLY] Searching: {term}")
-            try:
-                url = f"https://www.coles.com.au/search?q={term}"
-                page.goto(url, wait_until="domcontentloaded", timeout=90000)
-                
-                simulate_human_behavior(page)
-                page.wait_for_selector("[data-testid='product-tile']", timeout=60000)
-                
-                tiles = page.locator("[data-testid='product-tile']").all()
-                for tile in tiles:
-                    try:
-                        name = tile.locator("[data-testid='product-title']").inner_text().strip()
-                        price_text = tile.locator("[data-testid='total-price']").inner_text().strip()
-                        price = clean_price(price_text)
-                        img = tile.locator("img").first.get_attribute("src") or ""
+            
+            max_retries = 3
+            tiles = []
+            
+            # --- THE RETRY LOOP ---
+            for attempt in range(max_retries):
+                try:
+                    url = f"https://www.coles.com.au/search?q={term}"
+                    # 45 second timeout. If the node is dead, fail fast and try a new one.
+                    page.goto(url, wait_until="domcontentloaded", timeout=45000)
+                    
+                    simulate_human_behavior(page)
+                    page.wait_for_selector("[data-testid='product-tile']", timeout=30000)
+                    
+                    tiles = page.locator("[data-testid='product-tile']").all()
+                    if len(tiles) > 0:
+                        break # We got the data! Break out of the retry loop.
+                        
+                except Exception as e:
+                    print(f"    ⚠️ Dead proxy node (Attempt {attempt + 1}/{max_retries}). Refreshing connection...")
+                    human_delay(2, 4)
+            # ----------------------
 
-                        if name and price:
-                            key = (name, STORE_NAME)
-                            if key in existing:
-                                old = existing[key]
-                                all_updates.append((old['row'], ["Pantry", STORE_NAME, price, None, "TRUE", img, ""]))
-                            else:
-                                all_new_rows.append(["", name, "Pantry", STORE_NAME, price, "", "TRUE", img])
-                    except: continue
-                
-                human_delay(5, 10)
-                
-            except Exception as e:
-                print(f"    ⚠️ REAL ERROR on {term}: {str(e)}")
+            if not tiles:
+                print(f"    ❌ Skipping {term} after {max_retries} dead node attempts.")
                 continue
+
+            # If we made it here, we have a working node and real data.
+            for tile in tiles:
+                try:
+                    name = tile.locator("[data-testid='product-title']").inner_text().strip()
+                    price_text = tile.locator("[data-testid='total-price']").inner_text().strip()
+                    price = clean_price(price_text)
+                    img = tile.locator("img").first.get_attribute("src") or ""
+
+                    if name and price:
+                        key = (name, STORE_NAME)
+                        if key in existing:
+                            old = existing[key]
+                            all_updates.append((old['row'], ["Pantry", STORE_NAME, price, None, "TRUE", img, ""]))
+                        else:
+                            all_new_rows.append(["", name, "Pantry", STORE_NAME, price, "", "TRUE", img])
+                except: continue
+            
+            human_delay(5, 10)
 
         browser.close()
 
