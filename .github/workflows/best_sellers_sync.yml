@@ -36,16 +36,25 @@ jobs:
       env:
         GOOGLE_SHEET_ID: 14cci7jorS43qBbAW673-jh_394TPHeCcC4lYAOqIk0k
         GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+        PROXY_SERVER: ${{ secrets.PROXY_SERVER }}
+        PROXY_USERNAME: ${{ secrets.PROXY_USERNAME }}
+        PROXY_PASSWORD: ${{ secrets.PROXY_PASSWORD }}
       run: python coles_to_sheets.py
 
     - name: Run Woolworths Best Sellers
       env:
         GOOGLE_SHEET_ID: 14cci7jorS43qBbAW673-jh_394TPHeCcC4lYAOqIk0k
         GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+        PROXY_SERVER: ${{ secrets.PROXY_SERVER }}
+        PROXY_USERNAME: ${{ secrets.PROXY_USERNAME }}
+        PROXY_PASSWORD: ${{ secrets.PROXY_PASSWORD }}
       run: python woolworths_to_sheets.py
 
     - name: Run Aldi Best Sellers
       env:
         GOOGLE_SHEET_ID: 14cci7jorS43qBbAW673-jh_394TPHeCcC4lYAOqIk0k
         GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+        PROXY_SERVER: ${{ secrets.PROXY_SERVER }}
+        PROXY_USERNAME: ${{ secrets.PROXY_USERNAME }}
+        PROXY_PASSWORD: ${{ secrets.PROXY_PASSWORD }}
       run: python aldi_full_catalog.py
