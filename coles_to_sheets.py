@@ -1,3 +1,4 @@
+import os
 import time
 import random
 import re
@@ -6,6 +7,7 @@ from playwright_stealth import Stealth
 import sheets_helper
 
 STORE_NAME = "Coles"
+# The lightweight list for your weekly run
 SEARCH_TERMS = ["milk", "bread", "eggs", "butter", "cheese", "yoghurt", "chicken", "beef", "apples", "bananas"]
 
 def clean_price(text):
@@ -14,11 +16,9 @@ def clean_price(text):
     return float(match.group(1)) if match else 0.0
 
 def human_delay(min_sec=2, max_sec=5):
-    """Mimics a user pausing to read or getting distracted."""
     time.sleep(random.uniform(min_sec, max_sec))
 
 def simulate_human_behavior(page):
-    """Simulates erratic mouse movement and scrolling."""
     scroll_amount = random.randint(300, 800)
     page.mouse.wheel(0, scroll_amount)
     human_delay(1, 3)
@@ -35,9 +35,28 @@ def main():
     existing = sheets_helper.load_existing_listings(worksheet)
     all_new_rows, all_updates = [], []
 
+    # Securely grab your IPRoyal credentials from GitHub Secrets
+    proxy_server = os.environ.get("PROXY_SERVER")
+    proxy_username = os.environ.get("PROXY_USERNAME")
+    proxy_password = os.environ.get("PROXY_PASSWORD")
+
+    proxy_settings = None
+    if proxy_server and proxy_username and proxy_password:
+        proxy_settings = {
+            "server": proxy_server,
+            "username": proxy_username,
+            "password": proxy_password
+        }
+    else:
+        print("  ⚠️ CRITICAL: Proxy credentials missing from environment!")
+
     with sync_playwright() as p:
-        # CRITICAL FIX: GitHub Actions requires headless=True
-        browser = p.chromium.launch(headless=True, slow_mo=random.randint(200, 600)) 
+        # Launching with the Residential Proxy Active
+        browser = p.chromium.launch(
+            headless=True, 
+            proxy=proxy_settings,
+            slow_mo=random.randint(200, 500)
+        ) 
         
         context = browser.new_context(
             viewport={'width': 1366, 'height': 768},
@@ -48,19 +67,21 @@ def main():
         page = context.new_page()
         Stealth().use_sync(page)
 
-        print("  [HUMAN MODE] Navigating to homepage...")
-        page.goto("https://www.coles.com.au/", timeout=60000)
-        simulate_human_behavior(page)
+        print("  [WEEKLY PROXY MODE] Starting Best Sellers Sync...")
+        try:
+            page.goto("https://www.coles.com.au/", timeout=90000)
+            simulate_human_behavior(page)
+        except Exception:
+            pass
 
         for term in SEARCH_TERMS:
-            print(f"  [HUMAN MODE] Searching: {term}")
+            print(f"  [WEEKLY] Searching: {term}")
             try:
                 url = f"https://www.coles.com.au/search?q={term}"
-                page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                page.goto(url, wait_until="domcontentloaded", timeout=90000)
                 
                 simulate_human_behavior(page)
-                
-                page.wait_for_selector("[data-testid='product-tile']", timeout=45000)
+                page.wait_for_selector("[data-testid='product-tile']", timeout=60000)
                 
                 tiles = page.locator("[data-testid='product-tile']").all()
                 for tile in tiles:
@@ -79,17 +100,16 @@ def main():
                                 all_new_rows.append(["", name, "Pantry", STORE_NAME, price, "", "TRUE", img])
                     except: continue
                 
-                print(f"    Extracted {term}. Taking a breather...")
-                human_delay(8, 15)
+                human_delay(5, 10)
                 
             except Exception as e:
-                print(f"    ⚠️ Failed on {term}. Taking a longer break to avoid suspicion.")
-                human_delay(15, 30)
+                print(f"    ⚠️ Timeout on {term}. Proxy node might be slow. Skipping.")
                 continue
 
         browser.close()
 
     sheets_helper.batch_upsert(worksheet, STORE_NAME, all_new_rows, all_updates)
+    print("  [WEEKLY PROXY MODE] Sync complete.")
 
 if __name__ == "__main__":
     main()

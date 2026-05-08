@@ -1,38 +1,92 @@
+import os
 import time
-from curl_cffi import requests
+import random
+import re
+from playwright.sync_api import sync_playwright
+from playwright_stealth import Stealth
 import sheets_helper
 
 STORE_NAME = "Woolworths"
-CAT_MAP = {"1-E5BEE36E": "Fruit & Veg", "1_6E4E4E4": "Dairy, Eggs & Fridge"}
+CATEGORIES = [
+    "1-e5b3436/fruit-veg", "1-E5B3436/meat-seafood-deli", 
+    "1-E5B3436/bakery", "1-E5B3436/dairy-eggs-fridge", "1-E5B3436/pantry"
+]
+
+def clean_price(text):
+    if not text: return 0.0
+    match = re.search(r'(\d+\.?\d*)', text.replace('$', ''))
+    return float(match.group(1)) if match else 0.0
+
+def human_delay(min_sec=3, max_sec=7):
+    time.sleep(random.uniform(min_sec, max_sec))
+
+def simulate_human_behavior(page):
+    scroll_amount = random.randint(300, 800)
+    page.mouse.wheel(0, scroll_amount)
+    human_delay(1, 3)
+    page.mouse.wheel(0, -random.randint(100, scroll_amount))
+    for _ in range(2):
+        page.mouse.move(random.randint(100, 1000), random.randint(100, 800), steps=10)
 
 def main():
     worksheet = sheets_helper.get_listings_worksheet()
     existing = sheets_helper.load_existing_listings(worksheet)
+    all_new_rows, all_updates = [], []
 
-    for cat_id, cat_name in CAT_MAP.items():
-        print(f"  Scraping Woolies: {cat_name}")
-        url = "https://www.woolworths.com.au/apis/ui/browse/category"
-        params = {"categoryId": cat_id, "pageNumber": 1, "pageSize": 36}
-        
-        r = requests.get(url, params=params, impersonate="chrome124")
-        bundles = r.json().get('Bundles', [])
-        
-        new_rows, updates = [], []
-        for b in bundles:
-            p = b.get('Products', [{}])[0]
-            name = p.get('Name')
-            price = p.get('Price')
-            img = p.get('MediumImageFile')
+    proxy_server = os.environ.get("PROXY_SERVER")
+    proxy_username = os.environ.get("PROXY_USERNAME")
+    proxy_password = os.environ.get("PROXY_PASSWORD")
 
-            key = (name, STORE_NAME)
-            if key in existing:
-                old = existing[key]
-                updates.append((old['row'], [cat_name, STORE_NAME, price, None, "TRUE", img, ""]))
-            else:
-                new_rows.append(["", name, cat_name, STORE_NAME, price, "", "TRUE", img])
-        
-        if new_rows or updates:
-            sheets_helper.batch_upsert(worksheet, STORE_NAME, new_rows, updates)
+    proxy_settings = None
+    if proxy_server and proxy_username and proxy_password:
+        proxy_settings = {
+            "server": proxy_server, "username": proxy_username, "password": proxy_password
+        }
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True, proxy=proxy_settings, slow_mo=random.randint(200, 600)) 
+        context = browser.new_context(
+            viewport={'width': 1366, 'height': 768},
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            locale="en-AU", timezone_id="Australia/Sydney"
+        )
+        page = context.new_page()
+        Stealth().use_sync(page)
+
+        print(f"  [MONTHLY PROXY MODE] Starting {STORE_NAME} Full Catalog...")
+        for category in CATEGORIES:
+            print(f"  [MONTHLY] Scraping Category: {category}")
+            try:
+                url = f"https://www.woolworths.com.au/shop/browse/{category}"
+                page.goto(url, wait_until="domcontentloaded", timeout=90000)
+                simulate_human_behavior(page)
+                page.wait_for_selector(".product-grid-v2--tile", timeout=60000)
+                
+                tiles = page.locator(".product-grid-v2--tile").all()
+                for tile in tiles:
+                    try:
+                        name = tile.locator(".product-title-link").inner_text().strip()
+                        price_text = tile.locator(".price-dollars").inner_text().strip()
+                        price = clean_price(price_text)
+                        img = tile.locator("img").first.get_attribute("src") or ""
+
+                        if name and price:
+                            key = (name, STORE_NAME)
+                            if key in existing:
+                                old = existing[key]
+                                all_updates.append((old['row'], ["Pantry", STORE_NAME, price, None, "TRUE", img, ""]))
+                            else:
+                                all_new_rows.append(["", name, "Pantry", STORE_NAME, price, "", "TRUE", img])
+                    except: continue
+                human_delay(10, 20) 
+            except Exception:
+                print(f"    ⚠️ Failed to load category {category}. Skipping.")
+                continue
+
+        browser.close()
+
+    sheets_helper.batch_upsert(worksheet, STORE_NAME, all_new_rows, all_updates)
+    print(f"  [MONTHLY PROXY MODE] {STORE_NAME} Full Catalog Sync complete.")
 
 if __name__ == "__main__":
     main()
