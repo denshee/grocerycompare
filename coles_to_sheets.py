@@ -59,4 +59,56 @@ def main():
         
         context = browser.new_context(
             viewport={'width': 1366, 'height': 768},
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            locale="en-AU",
+            timezone_id="Australia/Sydney"
+        )
+        page = context.new_page()
+        Stealth().use_sync(page)
+
+        print("  [WEEKLY PROXY MODE] Starting Best Sellers Sync...")
+        try:
+            page.goto("https://www.coles.com.au/", timeout=90000)
+            simulate_human_behavior(page)
+        except Exception as e:
+            print(f"  ⚠️ REAL ERROR ON HOMEPAGE: {str(e)}")
+
+        for term in SEARCH_TERMS:
+            print(f"  [WEEKLY] Searching: {term}")
+            try:
+                url = f"https://www.coles.com.au/search?q={term}"
+                page.goto(url, wait_until="domcontentloaded", timeout=90000)
+                
+                simulate_human_behavior(page)
+                page.wait_for_selector("[data-testid='product-tile']", timeout=60000)
+                
+                tiles = page.locator("[data-testid='product-tile']").all()
+                for tile in tiles:
+                    try:
+                        name = tile.locator("[data-testid='product-title']").inner_text().strip()
+                        price_text = tile.locator("[data-testid='total-price']").inner_text().strip()
+                        price = clean_price(price_text)
+                        img = tile.locator("img").first.get_attribute("src") or ""
+
+                        if name and price:
+                            key = (name, STORE_NAME)
+                            if key in existing:
+                                old = existing[key]
+                                all_updates.append((old['row'], ["Pantry", STORE_NAME, price, None, "TRUE", img, ""]))
+                            else:
+                                all_new_rows.append(["", name, "Pantry", STORE_NAME, price, "", "TRUE", img])
+                    except: continue
+                
+                human_delay(5, 10)
+                
+            except Exception as e:
+                print(f"    ⚠️ REAL ERROR on {term}: {str(e)}")
+                continue
+
+        browser.close()
+
+    sheets_helper.batch_upsert(worksheet, STORE_NAME, all_new_rows, all_updates)
+    print("  [WEEKLY PROXY MODE] Sync complete.")
+
+if __name__ == "__main__":
+    main()
